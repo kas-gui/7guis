@@ -6,7 +6,7 @@ This repository implements the benchmark's tasks via the [KAS] GUI.
 
 [KAS]: https://github.com/kas-gui/kas
 
-Running examples
+Running the benchmark's tasks
 ----------------
 
 If you haven't already, install Rust: <https://www.rust-lang.org/>
@@ -17,13 +17,27 @@ Cargo should take care of most dependencies, but note that:
 -   [WebGPU](https://github.com/gfx-rs/wgpu-rs) requires DirectX 11/12, Vulkan or
     Metal (in the future it may support OpenGL)
 
-Next, clone the repository and run the examples as follows:
+Next, clone the repository and run the tasks as follows:
 
 ```
 git clone https://github.com/kas-gui/7guis
 cd 7guis
 cargo run --bin counter
 ```
+
+Tasks
+----
+
+A brief list of the implemented tasks:
+
+### Counter
+
+```
+cargo run --bin counter
+```
+
+A very simple push-button application.
+
 
 
 Copyright and Licence
