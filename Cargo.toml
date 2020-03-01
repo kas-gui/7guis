@@ -1,0 +1,12 @@
+[package]
+name = "kas-7guis"
+version = "0.1.0"
+authors = ["Diggory Hardy <git@dhardy.name>"]
+edition = "2018"
+
+[dependencies.kas-wgpu]
+version = "0.3"
+
+[[bin]]
+name = "counter"
+path = "counter/main.rs"
