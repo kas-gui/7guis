@@ -6,8 +6,6 @@
 //! Temperature converter
 //!
 //! TODO: restrict initial size, without making it fixed or too small.
-//!
-//! TODO: update on char entry
 #![feature(proc_macro_hygiene)]
 
 use kas::class::HasText;
@@ -18,7 +16,6 @@ use kas_wgpu::{kas, theme};
 
 #[derive(Clone, Debug, VoidMsg)]
 enum Message {
-    Invalid,
     FromCelsius(f64),
     FromFahrenheit(f64),
 }
@@ -32,20 +29,15 @@ fn main() -> Result<(), kas_wgpu::Error> {
             #[handler(msg = VoidMsg)]
             struct {
                 #[widget(handler=convert)] celsius: impl HasText = EditBox::new("0")
-                    .on_activate(|entry| entry.parse::<f64>()
-                        .map(|c| Message::FromCelsius(c))
-                        .unwrap_or(Message::Invalid)),
+                    .on_edit(|text| text.parse::<f64>().ok().map(|c| Message::FromCelsius(c))),
                 #[widget] _ = Label::from("Celsius ="),
                 #[widget(handler=convert)] fahrenheit: impl HasText = EditBox::new("32")
-                    .on_activate(|entry| entry.parse::<f64>()
-                        .map(|f| Message::FromFahrenheit(f))
-                        .unwrap_or(Message::Invalid)),
+                    .on_edit(|text| text.parse::<f64>().ok().map(|c| Message::FromFahrenheit(c))),
                 #[widget] _ = Label::from("Fahrenheit"),
             }
             impl {
                 fn convert(&mut self, mgr: &mut Manager, msg: Message) -> VoidResponse {
                     match msg {
-                        Message::Invalid => (),
                         Message::FromCelsius(c) => {
                             let f = c * (9.0/5.0) + 32.0;
                             self.fahrenheit.set_text(mgr, f.to_string());
