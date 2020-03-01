@@ -8,11 +8,11 @@
 //! TODO: restrict initial size, without making it fixed or too small.
 #![feature(proc_macro_hygiene)]
 
-use kas_wgpu::{kas, theme};
 use kas::class::HasText;
 use kas::event::{Manager, VoidMsg, VoidResponse};
 use kas::macros::make_widget;
 use kas::widget::{Label, TextButton, Window};
+use kas_wgpu::{kas, theme};
 
 fn main() -> Result<(), kas_wgpu::Error> {
     let window = Window::new(

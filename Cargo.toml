@@ -10,3 +10,7 @@ version = "0.3"
 [[bin]]
 name = "counter"
 path = "counter/main.rs"
+
+[[bin]]
+name = "temp-conv"
+path = "temp-conv/main.rs"

@@ -38,6 +38,15 @@ cargo run --bin counter
 
 A very simple push-button application.
 
+### Temperature Converter
+
+```
+cargo run --bin temp-conv
+```
+
+An application to convert between Celsius and Fahrenheit temperatures.
+
+Note: for now, one must press the *Enter* key to invoke the calculation.
 
 
 Copyright and Licence
