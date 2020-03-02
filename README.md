@@ -6,23 +6,29 @@ This repository implements the benchmark's tasks via the [KAS] GUI.
 
 [KAS]: https://github.com/kas-gui/kas
 
-Running the benchmark's tasks
+Installation and dependencies
 ----------------
 
-If you haven't already, install Rust: <https://www.rust-lang.org/>
+Currently, KAS's only drawing method is [WebGPU](https://github.com/gfx-rs/wgpu-rs),
+which requires DirectX 11/12, Vulkan or Metal.
+In the future, there may be support for OpenGL and software rendering.
 
-Cargo should take care of most dependencies, but note that:
+If you haven't already, install [Rust](https://www.rust-lang.org/), including
+the *nightly* channel (`rustup toolchain install nightly`). Either make nightly
+the default (`rustup default nightly`) or use `cargo +nightly ...` below.
 
--   [shaderc may require some setup](https://github.com/google/shaderc-rs#setup)
--   [WebGPU](https://github.com/gfx-rs/wgpu-rs) requires DirectX 11/12, Vulkan or
-    Metal (in the future it may support OpenGL)
+A few other dependencies may require installation, depending on the system.
+On Ubuntu:
 
-Next, clone the repository and run the tasks as follows:
+```sh
+sudo apt-get install build-essential git python3 cmake libxcb-shape0-dev libxcb-xfixes0-dev
+```
+
+Next, clone the repository:
 
 ```
 git clone https://github.com/kas-gui/7guis
 cd 7guis
-cargo run --bin counter
 ```
 
 Tasks
