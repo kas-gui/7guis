@@ -4,8 +4,6 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 //! Counter
-//!
-//! TODO: restrict initial size, without making it fixed or too small.
 #![feature(proc_macro_hygiene)]
 
 use kas::class::HasText;
@@ -19,17 +17,17 @@ fn main() -> Result<(), kas_wgpu::Error> {
         "Counter",
         make_widget! {
             #[widget]
-            #[layout(horizontal)]
+            #[layout(row)]
             #[handler(msg = VoidMsg)]
             struct {
-                #[widget(halign = centre)] display: Label = Label::from("0"),
+                #[widget(halign = centre)] display: Label = Label::new("0").reserve("0000"),
                 #[widget(handler = count)] _ = TextButton::new("Count", ()),
                 counter: usize = 0,
             }
             impl {
                 fn count(&mut self, mgr: &mut Manager, _msg: ()) -> VoidResponse {
                     self.counter = self.counter.saturating_add(1);
-                    self.display.set_text(mgr, self.counter.to_string());
+                    *mgr += self.display.set_text(self.counter.to_string());
                     VoidResponse::None
                 }
             }

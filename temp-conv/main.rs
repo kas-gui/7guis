@@ -5,7 +5,7 @@
 
 //! Temperature converter
 //!
-//! TODO: restrict initial size, without making it fixed or too small.
+//! TODO: force single-line labels
 #![feature(proc_macro_hygiene)]
 
 use kas::class::HasText;
@@ -25,26 +25,26 @@ fn main() -> Result<(), kas_wgpu::Error> {
         "temp-conv",
         make_widget! {
             #[widget]
-            #[layout(horizontal)]
+            #[layout(row)]
             #[handler(msg = VoidMsg)]
             struct {
                 #[widget(handler=convert)] celsius: impl HasText = EditBox::new("0")
                     .on_edit(|text| text.parse::<f64>().ok().map(|c| Message::FromCelsius(c))),
-                #[widget] _ = Label::from("Celsius ="),
+                #[widget] _ = Label::new("Celsius ="),
                 #[widget(handler=convert)] fahrenheit: impl HasText = EditBox::new("32")
                     .on_edit(|text| text.parse::<f64>().ok().map(|c| Message::FromFahrenheit(c))),
-                #[widget] _ = Label::from("Fahrenheit"),
+                #[widget] _ = Label::new("Fahrenheit"),
             }
             impl {
                 fn convert(&mut self, mgr: &mut Manager, msg: Message) -> VoidResponse {
                     match msg {
                         Message::FromCelsius(c) => {
                             let f = c * (9.0/5.0) + 32.0;
-                            self.fahrenheit.set_text(mgr, f.to_string());
+                            *mgr += self.fahrenheit.set_text(f.to_string());
                         }
                         Message::FromFahrenheit(f) => {
                             let c = (f - 32.0) * (5.0 / 9.0);
-                            self.celsius.set_text(mgr, c.to_string());
+                            *mgr += self.celsius.set_text(c.to_string());
                         }
                     }
                     VoidResponse::None
