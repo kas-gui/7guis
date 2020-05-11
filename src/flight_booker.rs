@@ -4,14 +4,12 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 //! Flight booker
-#![feature(proc_macro_hygiene)]
 
 use chrono::{Duration, Local, NaiveDate};
 use kas::class::HasText;
 use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::{ComboBox, EditBox, EditGuard, MessageBox, TextButton, Window};
-use kas_wgpu::{kas, theme};
 
 #[derive(Clone, Debug, PartialEq, Eq, VoidMsg)]
 enum Flight {
@@ -47,7 +45,7 @@ impl EditGuard for Guard {
     }
 }
 
-fn main() -> Result<(), kas_wgpu::Error> {
+pub fn window() -> Box<dyn kas::Window> {
     // Default dates:
     let out = Local::today();
     let back = out + Duration::days(7);
@@ -62,7 +60,7 @@ fn main() -> Result<(), kas_wgpu::Error> {
     Guard::edit(&mut d2);
     let _ = d2.set_disabled(true);
 
-    let window = Window::new(
+    Box::new(Window::new(
         "Flight Booker",
         make_widget! {
             #[widget]
@@ -119,10 +117,5 @@ fn main() -> Result<(), kas_wgpu::Error> {
                 }
             }
         },
-    );
-
-    let theme = theme::ShadedTheme::new();
-    let mut toolkit = kas_wgpu::Toolkit::new(theme)?;
-    toolkit.add(window)?;
-    toolkit.run()
+    ))
 }

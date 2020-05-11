@@ -6,13 +6,11 @@
 //! Temperature converter
 //!
 //! TODO: force single-line labels
-#![feature(proc_macro_hygiene)]
 
 use kas::class::HasText;
 use kas::event::{Manager, VoidMsg, VoidResponse};
 use kas::macros::{make_widget, VoidMsg};
 use kas::widget::{EditBox, Label, Window};
-use kas_wgpu::{kas, theme};
 
 #[derive(Clone, Debug, VoidMsg)]
 enum Message {
@@ -20,9 +18,9 @@ enum Message {
     FromFahrenheit(f64),
 }
 
-fn main() -> Result<(), kas_wgpu::Error> {
-    let window = Window::new(
-        "temp-conv",
+pub fn window() -> Box<dyn kas::Window> {
+    Box::new(Window::new(
+        "Temperature Converter",
         make_widget! {
             #[widget]
             #[layout(row)]
@@ -51,10 +49,5 @@ fn main() -> Result<(), kas_wgpu::Error> {
                 }
             }
         },
-    );
-
-    let theme = theme::ShadedTheme::new();
-    let mut toolkit = kas_wgpu::Toolkit::new(theme)?;
-    toolkit.add(window)?;
-    toolkit.run()
+    ))
 }

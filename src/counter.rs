@@ -4,16 +4,14 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 //! Counter
-#![feature(proc_macro_hygiene)]
 
 use kas::class::HasText;
 use kas::event::{Manager, VoidMsg, VoidResponse};
 use kas::macros::make_widget;
 use kas::widget::{Label, TextButton, Window};
-use kas_wgpu::{kas, theme};
 
-fn main() -> Result<(), kas_wgpu::Error> {
-    let window = Window::new(
+pub fn window() -> Box<dyn kas::Window> {
+    Box::new(Window::new(
         "Counter",
         make_widget! {
             #[widget]
@@ -32,10 +30,5 @@ fn main() -> Result<(), kas_wgpu::Error> {
                 }
             }
         },
-    );
-
-    let theme = theme::ShadedTheme::new();
-    let mut toolkit = kas_wgpu::Toolkit::new(theme)?;
-    toolkit.add(window)?;
-    toolkit.run()
+    ))
 }

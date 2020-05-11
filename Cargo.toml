@@ -5,17 +5,6 @@ authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2018"
 
 [dependencies]
+kas = "0.4"
 kas-wgpu = "0.4"
 chrono = "0.4"
-
-[[bin]]
-name = "counter"
-path = "counter/main.rs"
-
-[[bin]]
-name = "temp-conv"
-path = "temp-conv/main.rs"
-
-[[bin]]
-name = "flight-booker"
-path = "flight-booker/main.rs"
