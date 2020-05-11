@@ -7,8 +7,9 @@
 #![feature(proc_macro_hygiene)]
 
 mod counter;
-mod temp_conv;
 mod flight_booker;
+mod temp_conv;
+mod timer;
 
 use kas::prelude::*;
 use kas::widget::{MessageBox, TextButton, Window};
@@ -46,6 +47,7 @@ fn main() -> Result<(), kas_wgpu::Error> {
                         X::Counter => counter::window(),
                         X::Temp => temp_conv::window(),
                         X::Flight => flight_booker::window(),
+                        X::Timer => timer::window(),
                         _ => Box::new(MessageBox::new("TODO", "Not implemented yet!")),
                     });
                     Response::None
