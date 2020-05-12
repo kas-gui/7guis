@@ -17,7 +17,7 @@ pub fn window() -> Box<dyn kas::Window> {
         make_widget! {
             #[widget(config = noauto)]
             #[layout(column)]
-            #[handler(handle = noauto, msg = VoidMsg)]
+            #[handler(handle = noauto)]
             struct {
                 #[widget] _ = Label::new("Elapsed time: GAUGE"), // TODO: progress bar
                 #[widget] elapsed: Label = Label::new("0.0s"),
@@ -73,7 +73,13 @@ pub fn window() -> Box<dyn kas::Window> {
             impl {
                 fn slider(&mut self, mgr: &mut Manager, millis: u64) -> VoidResponse {
                     self.dur = Duration::from_millis(millis);
-                    if self.start.is_none() && self.dur > self.saved {
+                    if let Some(start) = self.start {
+                        let elapsed = (Instant::now() - start) + self.saved;
+                        if elapsed >= self.dur {
+                            self.saved = elapsed;
+                            self.start = None;
+                        }
+                    } else if self.saved < self.dur {
                         self.start = Some(Instant::now());
                         mgr.update_on_timer(Duration::from_millis(100), self.id());
                     }
