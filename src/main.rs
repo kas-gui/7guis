@@ -7,6 +7,7 @@
 #![feature(proc_macro_hygiene)]
 
 mod counter;
+mod crud;
 mod flight_booker;
 mod temp_conv;
 mod timer;
@@ -48,6 +49,7 @@ fn main() -> Result<(), kas_wgpu::Error> {
                         X::Temp => temp_conv::window(),
                         X::Flight => flight_booker::window(),
                         X::Timer => timer::window(),
+                        X::Crud => crud::window(),
                         _ => Box::new(MessageBox::new("TODO", "Not implemented yet!")),
                     });
                     Response::None
