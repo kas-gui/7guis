@@ -5,7 +5,6 @@
 
 //! Timer
 
-use kas::class::HasText;
 use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::{Label, Slider, TextButton, Window};
@@ -20,7 +19,7 @@ pub fn window() -> Box<dyn kas::Window> {
             #[handler(handle = noauto)]
             struct {
                 #[widget] _ = Label::new("Elapsed time: GAUGE"), // TODO: progress bar
-                #[widget] elapsed: Label = Label::new("0.0s"),
+                #[widget] elapsed: Label<String> = Label::new("0.0s".to_string()),
                 #[widget(handler=slider)] _ = make_widget! {
                     // TODO: this layout widget is used only to add a label.
                     // Allow all controls to have labels without this?
@@ -58,7 +57,7 @@ pub fn window() -> Box<dyn kas::Window> {
                                     self.saved = dur;
                                     self.start = None;
                                 }
-                                *mgr += self.elapsed.set_text(format!(
+                                *mgr += self.elapsed.set_string(format!(
                                     "{}.{}s",
                                     dur.as_secs(),
                                     dur.subsec_millis() / 100
@@ -89,7 +88,7 @@ pub fn window() -> Box<dyn kas::Window> {
                     self.saved = Duration::default();
                     self.start = Some(Instant::now());
                     mgr.update_on_timer(Duration::from_millis(100), self.id());
-                    *mgr += self.elapsed.set_text("0.0s");
+                    *mgr += self.elapsed.set_string("0.0s".to_string());
                     Response::None
                 }
             }

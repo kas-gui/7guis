@@ -7,9 +7,9 @@
 //!
 //! TODO: force single-line labels
 
-use kas::class::HasText;
 use kas::event::{Manager, VoidMsg, VoidResponse};
 use kas::macros::{make_widget, VoidMsg};
+use kas::prelude::*;
 use kas::widget::{EditBox, Label, Window};
 
 #[derive(Clone, Debug, VoidMsg)]
@@ -26,10 +26,10 @@ pub fn window() -> Box<dyn kas::Window> {
             #[layout(row)]
             #[handler(msg = VoidMsg)]
             struct {
-                #[widget(handler=convert)] celsius: impl HasText = EditBox::new("0")
+                #[widget(handler=convert)] celsius: impl HasString = EditBox::new("0")
                     .on_edit(|text| text.parse::<f64>().ok().map(|c| Message::FromCelsius(c))),
                 #[widget] _ = Label::new("Celsius ="),
-                #[widget(handler=convert)] fahrenheit: impl HasText = EditBox::new("32")
+                #[widget(handler=convert)] fahrenheit: impl HasString = EditBox::new("32")
                     .on_edit(|text| text.parse::<f64>().ok().map(|c| Message::FromFahrenheit(c))),
                 #[widget] _ = Label::new("Fahrenheit"),
             }
@@ -38,11 +38,11 @@ pub fn window() -> Box<dyn kas::Window> {
                     match msg {
                         Message::FromCelsius(c) => {
                             let f = c * (9.0/5.0) + 32.0;
-                            *mgr += self.fahrenheit.set_text(f.to_string());
+                            *mgr += self.fahrenheit.set_string(f.to_string());
                         }
                         Message::FromFahrenheit(f) => {
                             let c = (f - 32.0) * (5.0 / 9.0);
-                            *mgr += self.celsius.set_text(c.to_string());
+                            *mgr += self.celsius.set_string(c.to_string());
                         }
                     }
                     VoidResponse::None

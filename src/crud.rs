@@ -5,7 +5,6 @@
 
 //! CRUD
 
-use kas::class::HasText;
 use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::{
@@ -26,7 +25,7 @@ struct NameGuard;
 impl EditGuard for NameGuard {
     type Msg = VoidMsg;
     fn edit(edit: &mut EditBox<Self>) -> Option<VoidMsg> {
-        edit.set_error_state(edit.get_text().len() == 0);
+        edit.set_error_state(edit.get_str().len() == 0);
         None
     }
 }
@@ -84,7 +83,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 if self.surname.len() == 0 {
                     return None;
                 }
-                Some((self.firstname.get_text().into(), self.surname.get_text().into()))
+                Some((self.firstname.get_string(), self.surname.get_string()))
             }
         }
     };

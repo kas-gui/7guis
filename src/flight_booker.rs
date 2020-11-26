@@ -6,7 +6,6 @@
 //! Flight booker
 
 use chrono::{Duration, Local, NaiveDate};
-use kas::class::HasText;
 use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::{ComboBox, EditBox, EditGuard, MessageBox, TextButton, Window};
@@ -29,7 +28,7 @@ impl Guard {
 impl EditGuard for Guard {
     type Msg = ();
     fn edit(edit: &mut EditBox<Self>) -> Option<()> {
-        let date = NaiveDate::parse_from_str(&edit.get_text(), "%Y-%m-%d");
+        let date = NaiveDate::parse_from_str(edit.get_str(), "%Y-%m-%d");
         edit.guard.date = match date {
             Ok(date) => Some(date),
             Err(e) => {
