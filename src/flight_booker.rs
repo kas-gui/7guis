@@ -28,7 +28,7 @@ impl Guard {
 impl EditGuard for Guard {
     type Msg = ();
     fn edit(edit: &mut EditBox<Self>) -> Option<()> {
-        let date = NaiveDate::parse_from_str(edit.get_str(), "%Y-%m-%d");
+        let date = NaiveDate::parse_from_str(edit.get_str().trim(), "%Y-%m-%d");
         edit.guard.date = match date {
             Ok(date) => Some(date),
             Err(e) => {

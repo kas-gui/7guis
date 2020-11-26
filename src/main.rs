@@ -34,13 +34,13 @@ fn main() -> Result<(), kas_wgpu::Error> {
             #[layout(column)]
             #[handler(msg = VoidMsg)]
             struct {
-                #[widget(handler = launch)] _ = TextButton::new("Counter", X::Counter),
-                #[widget(handler = launch)] _ = TextButton::new("Temperature Converter", X::Temp),
-                #[widget(handler = launch)] _ = TextButton::new("Flight Booker", X::Flight),
-                #[widget(handler = launch)] _ = TextButton::new("Timer", X::Timer),
-                #[widget(handler = launch)] _ = TextButton::new("CRUD (Create, Read, Update and Delete)", X::Crud),
-                #[widget(handler = launch)] _ = TextButton::new("Circle Drawer", X::Circle),
-                #[widget(handler = launch)] _ = TextButton::new("Cells", X::Cells),
+                #[widget(handler = launch)] _ = TextButton::new("&Counter", X::Counter),
+                #[widget(handler = launch)] _ = TextButton::new("Tem&perature Converter", X::Temp),
+                #[widget(handler = launch)] _ = TextButton::new("&Flight &Booker", X::Flight),
+                #[widget(handler = launch)] _ = TextButton::new("&Timer", X::Timer),
+                #[widget(handler = launch)] _ = TextButton::new("CRUD (Create, Read, &Update and &Delete)", X::Crud),
+                #[widget(handler = launch)] _ = TextButton::new("Ci&rcle Drawer", X::Circle),
+                #[widget(handler = launch)] _ = TextButton::new("Ce&lls", X::Cells),
             }
             impl {
                 fn launch(&mut self, mgr: &mut Manager, x: X) -> Response<VoidMsg> {
