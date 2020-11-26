@@ -4,14 +4,7 @@ version = "0.1.0"
 authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2018"
 
-[dependencies.kas-wgpu]
-version = "0.3"
-git = "https://github.com/kas-gui/kas.git"
-
-[[bin]]
-name = "counter"
-path = "counter/main.rs"
-
-[[bin]]
-name = "temp-conv"
-path = "temp-conv/main.rs"
+[dependencies]
+kas = "0.6"
+kas-wgpu = "0.6"
+chrono = "0.4"
