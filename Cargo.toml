@@ -8,3 +8,13 @@ edition = "2018"
 kas = "0.6"
 kas-wgpu = "0.6"
 chrono = "0.4"
+
+[patch.crates-io.kas]
+# path = '../kas'
+git = "https://github.com/kas-gui/kas"
+rev = "a626ef867639b5cc6217d47bb5df8c66d3bb7b8b"
+
+[patch.crates-io.kas-theme]
+# path = '../kas/kas-theme'
+git = "https://github.com/kas-gui/kas"
+rev = "a626ef867639b5cc6217d47bb5df8c66d3bb7b8b"
