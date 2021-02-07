@@ -16,18 +16,20 @@ enum Flight {
     Return,
 }
 
+// TODO: consider adding a view-and-edit widget (like SingleView but supporting
+// text editing) so that string representation is just a view of date repr.
 #[derive(Clone, Debug)]
 struct Guard {
     date: Option<NaiveDate>,
 }
 impl Guard {
-    fn new() -> Self {
-        Guard { date: None }
+    fn new(date: NaiveDate) -> Self {
+        Guard { date: Some(date) }
     }
 }
 impl EditGuard for Guard {
     type Msg = ();
-    fn edit(edit: &mut EditBox<Self>) -> Option<()> {
+    fn edit(edit: &mut EditBox<Self>, _: &mut Manager) -> Option<()> {
         let date = NaiveDate::parse_from_str(edit.get_str().trim(), "%Y-%m-%d");
         edit.guard.date = match date {
             Ok(date) => Some(date),
@@ -46,18 +48,13 @@ impl EditGuard for Guard {
 
 pub fn window() -> Box<dyn kas::Window> {
     // Default dates:
-    let out = Local::today();
+    let out = Local::today().naive_local();
     let back = out + Duration::days(7);
 
-    let mut d1 = EditBox::new(out.format("%Y-%m-%d").to_string()).with_guard(Guard::new());
-    let mut d2 = EditBox::new(back.format("%Y-%m-%d").to_string()).with_guard(Guard::new());
-
-    // Run edit guards once to set date value
-    // TODO: a content-centric widget type (with a trait to parse and format
-    // values) would make this a little easier
-    Guard::edit(&mut d1);
-    Guard::edit(&mut d2);
-    let _ = d2.set_disabled(true);
+    let d1 = EditBox::new(out.format("%Y-%m-%d").to_string()).with_guard(Guard::new(out));
+    let d2 = EditBox::new(back.format("%Y-%m-%d").to_string())
+        .with_guard(Guard::new(back))
+        .with_disabled(true);
 
     Box::new(Window::new(
         "Flight Booker",
@@ -76,7 +73,7 @@ pub fn window() -> Box<dyn kas::Window> {
             }
             impl {
                 fn combo(&mut self, mgr: &mut Manager, msg: Flight) -> VoidResponse {
-                    *mgr += self.d2.set_disabled(msg == Flight::OneWay);
+                    *mgr |= self.d2.set_disabled(msg == Flight::OneWay);
                     self.date(mgr, ())
                 }
                 fn date(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {
@@ -96,7 +93,7 @@ pub fn window() -> Box<dyn kas::Window> {
                             }
                         }
                     };
-                    *mgr += self.book.set_disabled(!is_ready);
+                    *mgr |= self.book.set_disabled(!is_ready);
                     VoidResponse::None
                 }
                 fn book(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {

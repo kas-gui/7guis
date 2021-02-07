@@ -8,7 +8,7 @@
 use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::{
-    Column, EditBox, EditGuard, Frame, Label, MenuEntry, ScrollRegion, TextButton, Window,
+    Column, EditBox, EditGuard, Filler, Frame, Label, MenuEntry, ScrollRegion, TextButton, Window,
 };
 use std::collections::HashMap;
 
@@ -24,7 +24,7 @@ enum Control {
 struct NameGuard;
 impl EditGuard for NameGuard {
     type Msg = VoidMsg;
-    fn edit(edit: &mut EditBox<Self>) -> Option<VoidMsg> {
+    fn edit(edit: &mut EditBox<Self>, _: &mut Manager) -> Option<VoidMsg> {
         edit.set_error_state(edit.get_str().len() == 0);
         None
     }
@@ -95,6 +95,7 @@ pub fn window() -> Box<dyn kas::Window> {
             #[widget] _ = TextButton::new("Create", Control::Create),
             #[widget] _ = TextButton::new("Update", Control::Update),
             #[widget] _ = TextButton::new("Delete", Control::Delete),
+            #[widget] _ = Filler::maximize(),
         }
     };
 
