@@ -5,12 +5,57 @@
 
 //! CRUD
 
+use kas::dir::Down;
 use kas::event::VoidResponse;
 use kas::prelude::*;
-use kas::widget::{
-    Column, EditBox, EditGuard, Filler, Frame, Label, MenuEntry, ScrollRegion, TextButton, Window,
-};
+use kas::widget::view::ListView;
+use kas::widget::{EditBox, EditGuard, Filler, Label, ScrollBars, TextButton, Window};
 use std::collections::HashMap;
+
+mod data {
+    use kas::widget::view::{Accessor, FilterAccessor};
+    use std::{cell::RefCell, rc::Rc};
+
+    #[derive(Clone, Debug)]
+    pub struct Entry {
+        first: String,
+        last: String,
+    }
+    impl Entry {
+        pub fn new<S: ToString, T: ToString>(last: T, first: S) -> Self {
+            Entry {
+                first: first.to_string(),
+                last: last.to_string(),
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    pub struct Entries(Vec<Entry>);
+
+    pub type Shared = Rc<RefCell<FilterAccessor<usize, Entries>>>;
+
+    impl Accessor<usize> for Entries {
+        type Item = String;
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        fn get(&self, index: usize) -> Self::Item {
+            let entry = &self.0[index];
+            format!("{}, {}", entry.last, entry.first)
+        }
+    }
+
+    pub fn get() -> Shared {
+        let entries = vec![
+            Entry::new("Emil", "Hans"),
+            Entry::new("Mustermann", "Max"),
+            Entry::new("Tisch", "Roman"),
+        ];
+        Rc::new(RefCell::new(FilterAccessor::new_visible(Entries(entries))))
+    }
+}
 
 #[derive(Clone, Debug, VoidMsg)]
 enum Control {
@@ -39,30 +84,25 @@ trait Editor {
 }
 
 pub fn window() -> Box<dyn kas::Window> {
-    // TODO: add a real listings box
-    let entries: Vec<MenuEntry<u64>> = vec![];
-    let list = Frame::new(ScrollRegion::new(Column::new(entries)));
+    let data = data::get();
+    let data2 = data.clone();
 
     let filter_list = make_widget! {
         #[layout(column)]
         #[handler(msg = Control)]
         struct {
-            #[widget] _ = Label::new("WARNING: UNFINISHED!"),
-            // TODO: filter should optionally hide list entries (but without removing widgets?)
-            #[widget] _ = make_widget! {
-                #[layout(row)]
-                #[handler(msg = VoidMsg)]
-                struct {
-                    #[widget] _ = Label::new("Filter prefix:"),
-                    #[widget] _ = EditBox::new(""),
-                }
-            },
-            #[widget(handler = select)] _ = list,
-        }
-        impl {
-            fn select(&mut self, _: &mut Manager, key: u64) -> Response<Control> {
-                Control::Select(key).into()
-            }
+            #[widget] filter = EditBox::new("").on_edit(move |text, mgr| {
+                // Note: this method of caseless matching is not unicode compliant!
+                // https://stackoverflow.com/questions/47298336/case-insensitive-string-matching-in-rust
+                let text = text.to_uppercase();
+                let update = data2
+                    .borrow_mut()
+                    .update_filter(|s| s.to_uppercase().contains(&text));
+                mgr.trigger_update(update, 0);
+                Option::<VoidMsg>::None
+            }),
+            #[widget] list =
+                ScrollBars::new(ListView::<Down, data::Shared>::new(data)),
         }
     };
 
