@@ -10,7 +10,7 @@ use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::view::ListView;
 use kas::widget::view::{Accessor, FilterAccessor, SimpleCaseInsensitiveFilter};
-use kas::widget::{EditBox, EditGuard, Filler, Label, ScrollBars, TextButton, Window};
+use kas::widget::{EditBox, EditGuard, Filler, Label, ScrollBars, TextButton, Window, EditField};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Debug)]
@@ -71,7 +71,7 @@ enum Control {
 struct NameGuard;
 impl EditGuard for NameGuard {
     type Msg = VoidMsg;
-    fn edit(edit: &mut EditBox<Self>, _: &mut Manager) -> Option<VoidMsg> {
+    fn edit(edit: &mut EditField<Self>, _: &mut Manager) -> Option<VoidMsg> {
         edit.set_error_state(edit.get_str().len() == 0);
         None
     }
@@ -128,9 +128,9 @@ pub fn window() -> Box<dyn kas::Window> {
         #[layout(row)]
         #[handler(msg = Control)]
         struct {
-            #[widget] _ = TextButton::new("Create", Control::Create),
-            #[widget] _ = TextButton::new("Update", Control::Update),
-            #[widget] _ = TextButton::new("Delete", Control::Delete),
+            #[widget] _ = TextButton::new_msg("Create", Control::Create),
+            #[widget] _ = TextButton::new_msg("Update", Control::Update),
+            #[widget] _ = TextButton::new_msg("Delete", Control::Delete),
             #[widget] _ = Filler::maximize(),
         }
     };

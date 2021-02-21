@@ -25,7 +25,7 @@ pub fn window() -> Box<dyn kas::Window> {
                         w.size_rules(size_handle, axis_info)
                     }
                 ),
-                #[widget(handler = count)] _ = TextButton::new("Count", ()),
+                #[widget(handler = count)] _ = TextButton::new_msg("Count", ()),
                 counter: usize = 0,
             }
             impl {

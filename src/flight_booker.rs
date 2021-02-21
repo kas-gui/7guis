@@ -8,7 +8,7 @@
 use chrono::{Duration, Local, NaiveDate};
 use kas::event::VoidResponse;
 use kas::prelude::*;
-use kas::widget::{ComboBox, EditBox, EditGuard, MessageBox, TextButton, Window};
+use kas::widget::{ComboBox, EditBox, EditGuard, MessageBox, TextButton, Window, EditField};
 
 #[derive(Clone, Debug, PartialEq, Eq, VoidMsg)]
 enum Flight {
@@ -29,7 +29,7 @@ impl Guard {
 }
 impl EditGuard for Guard {
     type Msg = ();
-    fn edit(edit: &mut EditBox<Self>, _: &mut Manager) -> Option<()> {
+    fn edit(edit: &mut EditField<Self>, _: &mut Manager) -> Option<()> {
         let date = NaiveDate::parse_from_str(edit.get_str().trim(), "%Y-%m-%d");
         edit.guard.date = match date {
             Ok(date) => Some(date),
@@ -69,7 +69,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 ].iter().cloned().collect(),
                 #[widget(handler = date)] d1: EditBox<Guard> = d1,
                 #[widget(handler = date)] d2: EditBox<Guard> = d2,
-                #[widget(handler = book)] book = TextButton::new("Book", ()),
+                #[widget(handler = book)] book = TextButton::new_msg("Book", ()),
             }
             impl {
                 fn combo(&mut self, mgr: &mut Manager, msg: Flight) -> VoidResponse {

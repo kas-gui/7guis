@@ -36,7 +36,7 @@ pub fn window() -> Box<dyn kas::Window> {
                             .with_value(Duration::from_secs(10)),
                     }
                 },
-                #[widget(handler=reset)] _ = TextButton::new("Reset", ()),
+                #[widget(handler=reset)] _ = TextButton::new_msg("Reset", ()),
                 dur: Duration = Duration::from_secs(10),
                 saved: Duration = Duration::default(),
                 start: Option<Instant> = None,
