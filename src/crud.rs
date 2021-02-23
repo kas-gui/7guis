@@ -8,9 +8,9 @@
 use kas::dir::Down;
 use kas::event::VoidResponse;
 use kas::prelude::*;
-use kas::widget::view::ListView;
 use kas::widget::view::{Accessor, FilterAccessor, SimpleCaseInsensitiveFilter};
-use kas::widget::{EditBox, EditGuard, Filler, Label, ScrollBars, TextButton, Window, EditField};
+use kas::widget::view::{ListView, SelectionMode};
+use kas::widget::{EditBox, EditField, EditGuard, Filler, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Debug)]
@@ -29,9 +29,21 @@ impl Entry {
 
 #[derive(Debug)]
 pub struct Entries(Vec<Entry>);
+// Implement a simple (lazy) CRUD interface
 impl Entries {
-    pub fn push(&mut self, entry: Entry) {
-        self.0.push(entry)
+    pub fn create(&mut self, entry: Entry) -> usize {
+        let index = self.0.len();
+        self.0.push(entry);
+        index
+    }
+    pub fn read(&self, index: usize) -> Entry {
+        self.0[index].clone()
+    }
+    pub fn update(&mut self, index: usize, entry: Entry) {
+        self.0[index] = entry;
+    }
+    pub fn delete(&mut self, index: usize) {
+        self.0.remove(index);
     }
 }
 
@@ -79,6 +91,11 @@ impl EditGuard for NameGuard {
 
 trait Editor {
     fn make_item(&self) -> Option<Entry>;
+    fn set_item(&mut self, item: Entry) -> TkAction;
+}
+
+trait Selected {
+    fn selected(&self) -> Option<usize>;
 }
 
 pub fn window() -> Box<dyn kas::Window> {
@@ -96,8 +113,13 @@ pub fn window() -> Box<dyn kas::Window> {
                 mgr.trigger_update(update, 0);
                 Option::<VoidMsg>::None
             }),
-            #[widget] list =
-                ScrollBars::new(ListView::<Down, SharedData>::new(data)),
+            #[widget] list: ScrollBars<ListView<Down, SharedData>> =
+                ScrollBars::new(ListView::new(data).with_selection_mode(SelectionMode::Single)),
+        }
+        impl Selected {
+            fn selected(&self) -> Option<usize> {
+                self.list.selected_iter().next()
+            }
         }
     };
 
@@ -121,6 +143,9 @@ pub fn window() -> Box<dyn kas::Window> {
                 }
                 Some(Entry::new(last, self.firstname.get_string()))
             }
+            fn set_item(&mut self, item: Entry) -> TkAction {
+                self.firstname.set_string(item.first) | self.surname.set_string(item.last)
+            }
         }
     };
 
@@ -141,7 +166,8 @@ pub fn window() -> Box<dyn kas::Window> {
             #[layout(grid)]
             #[handler(msg = VoidMsg)]
             struct {
-                #[widget(row = 0, col = 0, handler = controls)] _ = filter_list,
+                #[widget(row = 0, col = 0, handler = controls)] filter_list: impl Selected =
+                    filter_list,
                 #[widget(row = 0, col = 1)] editor: impl Editor = editor,
                 #[widget(row = 1, cspan = 2, handler = controls)] _ = controls,
                 data: SharedData = data3,
@@ -153,17 +179,25 @@ pub fn window() -> Box<dyn kas::Window> {
                         Control::Create => {
                             if let Some(item) = self.editor.make_item() {
                                 let mut data = self.data.borrow_mut();
-                                data.data.push(item);
-                                let update = data.refresh();
-                                mgr.trigger_update(update, 0);
+                                data.data.create(item);
+                                mgr.trigger_update(data.refresh(), 0);
                             }
                         }
                         Control::Update => {
-                            // TODO: if filter_list has a selected entry,
-                            // TODO: construct new entry from editor and update DB
+                            if let Some(index) = self.filter_list.selected() {
+                                if let Some(item) = self.editor.make_item() {
+                                    let mut data = self.data.borrow_mut();
+                                    data.data.update(index, item);
+                                    mgr.trigger_update(data.refresh(), 0);
+                                }
+                            }
                         }
                         Control::Delete => {
-                            // TODO: if filter_list has a selected entry, delete
+                            if let Some(index) = self.filter_list.selected() {
+                                let mut data = self.data.borrow_mut();
+                                data.data.delete(index);
+                                mgr.trigger_update(data.refresh(), 0);
+                            }
                         }
                         Control::Select(key) => {
                             // TODO: update editor with selected item

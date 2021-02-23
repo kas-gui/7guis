@@ -8,7 +8,7 @@
 use chrono::{Duration, Local, NaiveDate};
 use kas::event::VoidResponse;
 use kas::prelude::*;
-use kas::widget::{ComboBox, EditBox, EditGuard, MessageBox, TextButton, Window, EditField};
+use kas::widget::{ComboBox, EditBox, EditField, EditGuard, MessageBox, TextButton, Window};
 
 #[derive(Clone, Debug, PartialEq, Eq, VoidMsg)]
 enum Flight {
