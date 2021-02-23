@@ -8,8 +8,8 @@
 use kas::dir::Down;
 use kas::event::VoidResponse;
 use kas::prelude::*;
-use kas::widget::view::{Accessor, FilterAccessor, SimpleCaseInsensitiveFilter};
-use kas::widget::view::{ListView, SelectionMode};
+use kas::widget::view::{FilteredList, SimpleCaseInsensitiveFilter};
+use kas::widget::view::{ListData, ListView, SelectionMode};
 use kas::widget::{EditBox, EditField, EditGuard, Filler, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
 
@@ -47,17 +47,27 @@ impl Entries {
     }
 }
 
-pub type SharedData = Rc<RefCell<FilterAccessor<usize, Entries, SimpleCaseInsensitiveFilter>>>;
+pub type SharedData = Rc<RefCell<FilteredList<Entries, SimpleCaseInsensitiveFilter>>>;
 
-impl Accessor<usize> for Entries {
+impl ListData for Entries {
+    type Key = usize;
     type Item = String;
+
     fn len(&self) -> usize {
         self.0.len()
     }
 
-    fn get(&self, index: usize) -> Self::Item {
-        let entry = &self.0[index];
-        format!("{}, {}", entry.last, entry.first)
+    fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
+        self.0
+            .get(*key)
+            .map(|entry| format!("{}, {}", entry.last, entry.first))
+    }
+
+    fn iter_vec_from(&self, start: usize, limit: usize) -> Vec<(Self::Key, Self::Item)> {
+        let end = self.0.len().min(start + limit);
+        (start..end)
+            .map(|i| (i, self.get_cloned(&i).unwrap()))
+            .collect()
     }
 }
 
@@ -68,7 +78,7 @@ pub fn make_data() -> SharedData {
         Entry::new("Tisch", "Roman"),
     ];
     let filter = SimpleCaseInsensitiveFilter::new("");
-    Rc::new(RefCell::new(FilterAccessor::new(Entries(entries), filter)))
+    Rc::new(RefCell::new(FilteredList::new(Entries(entries), filter)))
 }
 
 #[derive(Clone, Debug, VoidMsg)]
@@ -118,7 +128,7 @@ pub fn window() -> Box<dyn kas::Window> {
         }
         impl Selected {
             fn selected(&self) -> Option<usize> {
-                self.list.selected_iter().next()
+                self.list.selected_iter().next().cloned()
             }
         }
     };
