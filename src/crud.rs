@@ -87,6 +87,7 @@ enum Control {
     Update,
     Delete,
     Select(usize),
+    Filter,
 }
 
 #[derive(Clone, Debug)]
@@ -102,10 +103,12 @@ impl EditGuard for NameGuard {
 trait Editor {
     fn make_item(&self) -> Option<Entry>;
     fn set_item(&mut self, item: Entry) -> TkAction;
+    fn clear(&mut self) -> TkAction;
 }
 
 trait Selected {
     fn selected(&self) -> Option<usize>;
+    fn clear_selected(&mut self);
 }
 
 pub fn window() -> Box<dyn kas::Window> {
@@ -121,7 +124,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 let filter = SimpleCaseInsensitiveFilter::new(text);
                 let update = data2.borrow_mut().set_filter(filter);
                 mgr.trigger_update(update, 0);
-                Option::<VoidMsg>::None
+                Some(Control::Filter)
             }),
             #[widget(handler=select)] list: ScrollBars<ListView<Down, SharedData>> =
                 ScrollBars::new(ListView::new(data).with_selection_mode(SelectionMode::Single)),
@@ -137,6 +140,9 @@ pub fn window() -> Box<dyn kas::Window> {
         impl Selected {
             fn selected(&self) -> Option<usize> {
                 self.list.selected_iter().next().cloned()
+            }
+            fn clear_selected(&mut self) {
+                self.list.clear_selected();
             }
         }
     };
@@ -163,6 +169,9 @@ pub fn window() -> Box<dyn kas::Window> {
             }
             fn set_item(&mut self, item: Entry) -> TkAction {
                 self.firstname.set_string(item.first) | self.surname.set_string(item.last)
+            }
+            fn clear(&mut self) -> TkAction {
+                self.firstname.set_string("".into()) | self.surname.set_string("".into())
             }
         }
     };
@@ -221,6 +230,14 @@ pub fn window() -> Box<dyn kas::Window> {
                             let data = self.data.borrow();
                             let item = data.data.read(key);
                             *mgr |= self.editor.set_item(item);
+                        }
+                        Control::Filter => {
+                            if let Some(index) = self.filter_list.selected() {
+                                if self.data.borrow().get_cloned(&index).is_none() {
+                                    self.filter_list.clear_selected();
+                                    *mgr |= self.editor.clear();
+                                }
+                            }
                         }
                     }
                     Response::None
