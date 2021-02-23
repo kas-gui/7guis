@@ -94,9 +94,8 @@ enum Control {
 struct NameGuard;
 impl EditGuard for NameGuard {
     type Msg = VoidMsg;
-    fn edit(edit: &mut EditField<Self>, _: &mut Manager) -> Option<VoidMsg> {
+    fn update(edit: &mut EditField<Self>) {
         edit.set_error_state(edit.get_str().len() == 0);
-        None
     }
 }
 
