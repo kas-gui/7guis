@@ -9,7 +9,7 @@ use kas::dir::Down;
 use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::view::{FilteredList, SimpleCaseInsensitiveFilter};
-use kas::widget::view::{ListData, ListView, SelectionMode};
+use kas::widget::view::{ListData, ListMsg, ListView, SelectionMode};
 use kas::widget::{EditBox, EditField, EditGuard, Filler, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
 
@@ -86,7 +86,7 @@ enum Control {
     Create,
     Update,
     Delete,
-    Select(u64),
+    Select(usize),
 }
 
 #[derive(Clone, Debug)]
@@ -123,8 +123,16 @@ pub fn window() -> Box<dyn kas::Window> {
                 mgr.trigger_update(update, 0);
                 Option::<VoidMsg>::None
             }),
-            #[widget] list: ScrollBars<ListView<Down, SharedData>> =
+            #[widget(handler=select)] list: ScrollBars<ListView<Down, SharedData>> =
                 ScrollBars::new(ListView::new(data).with_selection_mode(SelectionMode::Single)),
+        }
+        impl {
+            fn select(&mut self, _: &mut Manager, msg: ListMsg<usize, VoidMsg>) -> Response<Control> {
+                match msg {
+                    ListMsg::Select(key) => Control::Select(key).into(),
+                    _ => None.into()
+                }
+            }
         }
         impl Selected {
             fn selected(&self) -> Option<usize> {
@@ -210,7 +218,9 @@ pub fn window() -> Box<dyn kas::Window> {
                             }
                         }
                         Control::Select(key) => {
-                            // TODO: update editor with selected item
+                            let data = self.data.borrow();
+                            let item = data.data.read(key);
+                            *mgr |= self.editor.set_item(item);
                         }
                     }
                     Response::None
