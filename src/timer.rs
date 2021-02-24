@@ -5,10 +5,10 @@
 
 //! Timer
 
+use kas::dir::Right;
 use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::{Label, ProgressBar, Slider, TextButton, Window};
-use kas::Right;
 use std::time::{Duration, Instant};
 
 const DUR_MIN: Duration = Duration::from_secs(0);
@@ -36,7 +36,7 @@ pub fn window() -> Box<dyn kas::Window> {
                             .with_value(Duration::from_secs(10)),
                     }
                 },
-                #[widget(handler=reset)] _ = TextButton::new("Reset", ()),
+                #[widget(handler=reset)] _ = TextButton::new_msg("Reset", ()),
                 dur: Duration = Duration::from_secs(10),
                 saved: Duration = Duration::default(),
                 start: Option<Instant> = None,
@@ -63,8 +63,8 @@ pub fn window() -> Box<dyn kas::Window> {
                                     self.start = None;
                                 }
                                 let frac = dur.as_secs_f32() / self.dur.as_secs_f32();
-                                *mgr += self.progress.set_value(frac);
-                                *mgr += self.elapsed.set_string(format!(
+                                *mgr |= self.progress.set_value(frac);
+                                *mgr |= self.elapsed.set_string(format!(
                                     "{}.{}s",
                                     dur.as_secs(),
                                     dur.subsec_millis() / 100
@@ -91,15 +91,15 @@ pub fn window() -> Box<dyn kas::Window> {
                         mgr.update_on_timer(DUR_STEP, self.id());
                     }
                     let frac = elapsed.as_secs_f32() / self.dur.as_secs_f32();
-                    *mgr += self.progress.set_value(frac);
+                    *mgr |= self.progress.set_value(frac);
                     Response::None
                 }
                 fn reset(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {
                     self.saved = Duration::default();
                     self.start = Some(Instant::now());
                     mgr.update_on_timer(DUR_STEP, self.id());
-                    *mgr += self.progress.set_value(0.0);
-                    *mgr += self.elapsed.set_string("0.0s".to_string());
+                    *mgr |= self.progress.set_value(0.0);
+                    *mgr |= self.elapsed.set_string("0.0s".to_string());
                     Response::None
                 }
             }
