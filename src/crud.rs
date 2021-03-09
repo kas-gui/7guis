@@ -6,7 +6,7 @@
 //! Create Read Update Delete
 
 use kas::dir::Down;
-use kas::event::VoidResponse;
+use kas::event::{UpdateHandle, VoidResponse};
 use kas::prelude::*;
 use kas::widget::view::{FilteredList, SimpleCaseInsensitiveFilter};
 use kas::widget::view::{ListData, ListMsg, ListView, SelectionMode};
@@ -25,48 +25,68 @@ impl Entry {
             last: last.to_string(),
         }
     }
+    pub fn format(&self) -> String {
+        format!("{}, {}", self.last, self.first)
+    }
 }
 
 #[derive(Debug)]
-pub struct Entries(Vec<Entry>);
+pub struct Entries {
+    v: RefCell<Vec<Entry>>,
+    // TODO: we now have two update handles
+    u: UpdateHandle,
+}
+
 // Implement a simple (lazy) CRUD interface
 impl Entries {
-    pub fn create(&mut self, entry: Entry) -> usize {
-        let index = self.0.len();
-        self.0.push(entry);
-        index
+    pub fn new(v: Vec<Entry>) -> Self {
+        Entries {
+            v: RefCell::new(v),
+            u: UpdateHandle::new(),
+        }
+    }
+    pub fn create(&self, entry: Entry) -> UpdateHandle {
+        self.v.borrow_mut().push(entry);
+        self.u
     }
     pub fn read(&self, index: usize) -> Entry {
-        self.0[index].clone()
+        self.v.borrow()[index].clone()
     }
-    pub fn update(&mut self, index: usize, entry: Entry) {
-        self.0[index] = entry;
+    pub fn update(&self, index: usize, entry: Entry) -> UpdateHandle {
+        self.v.borrow_mut()[index] = entry;
+        self.u
     }
-    pub fn delete(&mut self, index: usize) {
-        self.0.remove(index);
+    pub fn delete(&self, index: usize) -> UpdateHandle {
+        self.v.borrow_mut().remove(index);
+        self.u
     }
 }
 
-pub type SharedData = Rc<RefCell<FilteredList<Entries, SimpleCaseInsensitiveFilter>>>;
+pub type SharedData = Rc<FilteredList<Entries, SimpleCaseInsensitiveFilter>>;
 
 impl ListData for Entries {
     type Key = usize;
     type Item = String;
 
     fn len(&self) -> usize {
-        self.0.len()
+        self.v.borrow().len()
     }
 
     fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
-        self.0
-            .get(*key)
-            .map(|entry| format!("{}, {}", entry.last, entry.first))
+        self.v.borrow().get(*key).map(|e| e.format())
+    }
+
+    fn update(&self, _: &Self::Key, _: Self::Item) -> Option<UpdateHandle> {
+        None // we could implement updates but don't need to
     }
 
     fn iter_vec_from(&self, start: usize, limit: usize) -> Vec<(Self::Key, Self::Item)> {
-        let end = self.0.len().min(start + limit);
-        (start..end)
-            .map(|i| (i, self.get_cloned(&i).unwrap()))
+        let v = self.v.borrow();
+        v.iter()
+            .map(|e| e.format())
+            .enumerate()
+            .skip(start)
+            .take(limit)
             .collect()
     }
 }
@@ -78,7 +98,7 @@ pub fn make_data() -> SharedData {
         Entry::new("Tisch", "Roman"),
     ];
     let filter = SimpleCaseInsensitiveFilter::new("");
-    Rc::new(RefCell::new(FilteredList::new(Entries(entries), filter)))
+    Rc::new(FilteredList::new(Entries::new(entries), filter))
 }
 
 #[derive(Clone, Debug, VoidMsg)]
@@ -121,7 +141,7 @@ pub fn window() -> Box<dyn kas::Window> {
         struct {
             #[widget] filter = EditBox::new("").on_edit(move |text, mgr| {
                 let filter = SimpleCaseInsensitiveFilter::new(text);
-                let update = data2.borrow_mut().set_filter(filter);
+                let update = data2.set_filter(filter);
                 mgr.trigger_update(update, 0);
                 Some(Control::Filter)
             }),
@@ -132,7 +152,7 @@ pub fn window() -> Box<dyn kas::Window> {
             fn select(&mut self, _: &mut Manager, msg: ListMsg<usize, VoidMsg>) -> Response<Control> {
                 match msg {
                     ListMsg::Select(key) => Control::Select(key).into(),
-                    _ => None.into()
+                    _ => Response::None
                 }
             }
         }
@@ -204,35 +224,31 @@ pub fn window() -> Box<dyn kas::Window> {
                     match control {
                         Control::Create => {
                             if let Some(item) = self.editor.make_item() {
-                                let mut data = self.data.borrow_mut();
-                                data.data.create(item);
-                                mgr.trigger_update(data.refresh(), 0);
+                                let update = self.data.data.create(item);
+                                mgr.trigger_update(update, 0);
                             }
                         }
                         Control::Update => {
                             if let Some(index) = self.filter_list.selected() {
                                 if let Some(item) = self.editor.make_item() {
-                                    let mut data = self.data.borrow_mut();
-                                    data.data.update(index, item);
-                                    mgr.trigger_update(data.refresh(), 0);
+                                    let update = self.data.data.update(index, item);
+                                    mgr.trigger_update(update, 0);
                                 }
                             }
                         }
                         Control::Delete => {
                             if let Some(index) = self.filter_list.selected() {
-                                let mut data = self.data.borrow_mut();
-                                data.data.delete(index);
-                                mgr.trigger_update(data.refresh(), 0);
+                                let update = self.data.data.delete(index);
+                                mgr.trigger_update(update, 0);
                             }
                         }
                         Control::Select(key) => {
-                            let data = self.data.borrow();
-                            let item = data.data.read(key);
+                            let item = self.data.data.read(key);
                             *mgr |= self.editor.set_item(item);
                         }
                         Control::Filter => {
                             if let Some(index) = self.filter_list.selected() {
-                                if self.data.borrow().get_cloned(&index).is_none() {
+                                if self.data.get_cloned(&index).is_none() {
                                     self.filter_list.clear_selected();
                                     *mgr |= self.editor.clear();
                                 }

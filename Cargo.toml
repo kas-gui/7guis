@@ -12,14 +12,14 @@ chrono = "0.4"
 [patch.crates-io.kas]
 #path = '../kas'
 git = "https://github.com/kas-gui/kas"
-rev = "579f6de25087ae8e69a2e42c0ec42ae2be4f8d7e"
+rev = "d63b624c423bfa1d2641beca3f6d77a11fb90607"
 
 [patch.crates-io.kas-theme]
 #path = '../kas/kas-theme'
 git = "https://github.com/kas-gui/kas"
-rev = "579f6de25087ae8e69a2e42c0ec42ae2be4f8d7e"
+rev = "d63b624c423bfa1d2641beca3f6d77a11fb90607"
 
 [patch.crates-io.kas-wgpu]
 #path = '../kas/kas-wgpu'
 git = "https://github.com/kas-gui/kas"
-rev = "579f6de25087ae8e69a2e42c0ec42ae2be4f8d7e"
+rev = "d63b624c423bfa1d2641beca3f6d77a11fb90607"

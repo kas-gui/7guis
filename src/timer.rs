@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 const DUR_MIN: Duration = Duration::from_secs(0);
 const DUR_MAX: Duration = Duration::from_secs(30);
 const DUR_STEP: Duration = Duration::from_millis(100);
+const TIMER_ID: u64 = 0;
 
 pub fn window() -> Box<dyn kas::Window> {
     Box::new(Window::new(
@@ -32,6 +33,7 @@ pub fn window() -> Box<dyn kas::Window> {
                     #[handler(msg = Duration)]
                     struct {
                         #[widget] _ = Label::new("Duration:"),
+                        // TODO: reserve a minimum size around the slider?
                         #[widget] _ = Slider::new_with_direction(DUR_MIN, DUR_MAX, DUR_STEP, Right)
                             .with_value(Duration::from_secs(10)),
                     }
@@ -44,7 +46,7 @@ pub fn window() -> Box<dyn kas::Window> {
             impl WidgetConfig {
                 fn configure(&mut self, mgr: &mut Manager) {
                     self.start = Some(Instant::now());
-                    mgr.update_on_timer(DUR_STEP, self.id());
+                    mgr.update_on_timer(DUR_STEP, self.id(), TIMER_ID);
                 }
             }
             impl Handler {
@@ -52,11 +54,11 @@ pub fn window() -> Box<dyn kas::Window> {
 
                 fn handle(&mut self, mgr: &mut Manager, event: Event) -> VoidResponse {
                     match event {
-                        Event::TimerUpdate => {
+                        Event::TimerUpdate(TIMER_ID) => {
                             if let Some(start) = self.start {
                                 let mut dur = self.saved + (Instant::now() - start);
                                 if dur < self.dur {
-                                    mgr.update_on_timer(DUR_STEP, self.id());
+                                    mgr.update_on_timer(DUR_STEP, self.id(), TIMER_ID);
                                 } else {
                                     dur = self.dur;
                                     self.saved = dur;
@@ -72,7 +74,7 @@ pub fn window() -> Box<dyn kas::Window> {
                             }
                             Response::None
                         }
-                        event => Response::Unhandled(event),
+                        _ => Response::Unhandled,
                     }
                 }
             }
@@ -88,7 +90,7 @@ pub fn window() -> Box<dyn kas::Window> {
                         }
                     } else if self.saved < self.dur {
                         self.start = Some(Instant::now());
-                        mgr.update_on_timer(DUR_STEP, self.id());
+                        mgr.update_on_timer(DUR_STEP, self.id(), TIMER_ID);
                     }
                     let frac = elapsed.as_secs_f32() / self.dur.as_secs_f32();
                     *mgr |= self.progress.set_value(frac);
@@ -97,7 +99,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 fn reset(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {
                     self.saved = Duration::default();
                     self.start = Some(Instant::now());
-                    mgr.update_on_timer(DUR_STEP, self.id());
+                    mgr.update_on_timer(DUR_STEP, self.id(), TIMER_ID);
                     *mgr |= self.progress.set_value(0.0);
                     *mgr |= self.elapsed.set_string("0.0s".to_string());
                     Response::None
