@@ -5,11 +5,12 @@
 
 //! Create Read Update Delete
 
+use kas::data::{ListData, SharedData, SharedDataRec};
 use kas::dir::Down;
 use kas::event::{UpdateHandle, VoidResponse};
 use kas::prelude::*;
 use kas::widget::view::{FilteredList, SimpleCaseInsensitiveFilter};
-use kas::widget::view::{ListData, ListMsg, ListView, SelectionMode};
+use kas::widget::view::{ListMsg, ListView, SelectionMode};
 use kas::widget::{EditBox, EditField, EditGuard, Filler, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
 
@@ -62,8 +63,14 @@ impl Entries {
     }
 }
 
-pub type SharedData = Rc<FilteredList<Entries, SimpleCaseInsensitiveFilter>>;
+pub type Data = Rc<FilteredList<Entries, SimpleCaseInsensitiveFilter>>;
 
+impl SharedData for Entries {
+    fn update_handle(&self) -> Option<UpdateHandle> {
+        Some(self.u)
+    }
+}
+impl SharedDataRec for Entries {}
 impl ListData for Entries {
     type Key = usize;
     type Item = String;
@@ -91,7 +98,7 @@ impl ListData for Entries {
     }
 }
 
-pub fn make_data() -> SharedData {
+pub fn make_data() -> Data {
     let entries = vec![
         Entry::new("Emil", "Hans"),
         Entry::new("Mustermann", "Max"),
@@ -145,7 +152,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 mgr.trigger_update(update, 0);
                 Some(Control::Filter)
             }),
-            #[widget(handler=select)] list: ScrollBars<ListView<Down, SharedData>> =
+            #[widget(handler=select)] list: ScrollBars<ListView<Down, Data>> =
                 ScrollBars::new(ListView::new(data).with_selection_mode(SelectionMode::Single)),
         }
         impl {
@@ -216,7 +223,7 @@ pub fn window() -> Box<dyn kas::Window> {
                     filter_list,
                 #[widget(row = 0, col = 1)] editor: impl Editor = editor,
                 #[widget(row = 1, cspan = 2, handler = controls)] _ = controls,
-                data: SharedData = data3,
+                data: Data = data3,
                 next_id: u64 = 0,
             }
             impl {
