@@ -10,7 +10,7 @@ use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widget::{ComboBox, EditBox, EditField, EditGuard, MessageBox, TextButton, Window};
 
-#[derive(Clone, Debug, PartialEq, Eq, VoidMsg)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, VoidMsg)]
 enum Flight {
     OneWay,
     Return,
@@ -56,6 +56,9 @@ pub fn window() -> Box<dyn kas::Window> {
         .with_guard(Guard::new(back))
         .with_disabled(true);
 
+    let combo_labels = ["One-way flight", "Return flight"];
+    let combo_values = [Flight::OneWay, Flight::Return];
+
     Box::new(Window::new(
         "Flight Booker",
         make_widget! {
@@ -63,10 +66,8 @@ pub fn window() -> Box<dyn kas::Window> {
             #[layout(column)]
             #[handler(msg = VoidMsg)]
             struct {
-                #[widget(handler = combo)] _: ComboBox<Flight> = [
-                    ("One-way flight", Flight::OneWay),
-                    ("Return flight", Flight::Return)
-                ].iter().cloned().collect(),
+                #[widget(handler = combo)] _: ComboBox<Flight> = ComboBox::new(&combo_labels, 0)
+                    .on_select(move |_, index| Some(combo_values[index])),
                 #[widget(handler = date)] d1: EditBox<Guard> = d1,
                 #[widget(handler = date)] d2: EditBox<Guard> = d2,
                 #[widget(handler = book)] book = TextButton::new_msg("Book", ()),

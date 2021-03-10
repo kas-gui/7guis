@@ -27,6 +27,8 @@ enum X {
 }
 
 fn main() -> Result<(), kas_wgpu::Error> {
+    env_logger::init();
+
     let window = Window::new(
         "7GUIs Launcher",
         make_widget! {
