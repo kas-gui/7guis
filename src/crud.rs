@@ -119,8 +119,6 @@ enum Control {
     Create,
     Update,
     Delete,
-    Select(usize),
-    Filter,
 }
 
 #[derive(Clone, Debug)]
@@ -138,12 +136,6 @@ trait Editor {
     fn clear(&mut self) -> TkAction;
 }
 
-trait Selected {
-    fn selected(&self) -> Option<usize>;
-    fn clear_selected(&mut self);
-    fn select(&mut self, index: usize) -> bool;
-}
-
 trait Disable {
     fn disable_update_delete(&mut self, disable: bool) -> TkAction;
 }
@@ -152,40 +144,6 @@ pub fn window() -> Box<dyn kas::Window> {
     let data = make_data();
     let data2 = data.clone();
     let data3 = data.clone();
-
-    let filter_list = make_widget! {
-        #[layout(column)]
-        #[handler(msg = Control)]
-        struct {
-            #[widget] filter = EditBox::new("").on_edit(move |text, mgr| {
-                let filter = SimpleCaseInsensitiveFilter::new(text);
-                let update = data2.set_filter(filter);
-                mgr.trigger_update(update, 0);
-                Some(Control::Filter)
-            }),
-            #[widget(handler=select)] list: ScrollBars<ListView<Down, Data>> =
-                ScrollBars::new(ListView::new(data).with_selection_mode(SelectionMode::Single)),
-        }
-        impl {
-            fn select(&mut self, _: &mut Manager, msg: ListMsg<usize, VoidMsg>) -> Response<Control> {
-                match msg {
-                    ListMsg::Select(key) => Control::Select(key).into(),
-                    _ => Response::None
-                }
-            }
-        }
-        impl Selected {
-            fn selected(&self) -> Option<usize> {
-                self.list.selected_iter().next().cloned()
-            }
-            fn clear_selected(&mut self) {
-                self.list.clear_selected();
-            }
-            fn select(&mut self, index: usize) -> bool {
-                self.list.select(index).is_ok()
-            }
-        }
-    };
 
     let mut edit = EditBox::new("").with_guard(NameGuard);
     edit.set_error_state(true);
@@ -198,6 +156,7 @@ pub fn window() -> Box<dyn kas::Window> {
             #[widget(row = 0, col = 1)] firstname: EditBox<NameGuard> = edit.clone(),
             #[widget(row = 1, col = 0)] _ = Label::new("Surname:"),
             #[widget(row = 1, col = 1)] surname: EditBox<NameGuard> = edit,
+            #[widget(row = 2)] _ = Filler::new(),
         }
         impl Editor {
             fn make_item(&self) -> Option<Entry> {
@@ -225,7 +184,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 .with_disabled(true),
             #[widget] delete = TextButton::new_msg("Delete", Control::Delete)
                 .with_disabled(true),
-            #[widget] _ = Filler::maximize(),
+            #[widget] _ = Filler::new(),
         }
         impl Disable {
             fn disable_update_delete(&mut self, disable: bool) -> TkAction {
@@ -234,67 +193,85 @@ pub fn window() -> Box<dyn kas::Window> {
         }
     };
 
-    Box::new(Window::new(
-        "Create, Read, Update, Delete",
-        make_widget! {
-            #[layout(grid)]
-            #[handler(msg = VoidMsg)]
-            struct {
-                #[widget(row = 0, col = 0, handler = controls)] filter_list: impl Selected =
-                    filter_list,
-                #[widget(row = 0, col = 1)] editor: impl Editor = editor,
-                #[widget(row = 1, cspan = 2, handler = controls)] controls: impl Disable = controls,
-                data: Data = data3,
+    let crud = make_widget! {
+        #[layout(grid)]
+        #[handler(msg = VoidMsg)]
+        struct {
+            #[widget(row=0, col=0, handler=filter)] filter = EditBox::new("")
+                .on_edit(move |text, mgr| {
+                    let filter = SimpleCaseInsensitiveFilter::new(text);
+                    let update = data2.set_filter(filter);
+                    mgr.trigger_update(update, 0);
+                    Some(())
+                }
+            ),
+            #[widget(row=1, col=0, rspan=2, handler=select)] list:
+                ScrollBars<ListView<Down, Data>> =
+                ScrollBars::new(ListView::new(data).with_selection_mode(SelectionMode::Single)),
+            #[widget(row=1, col=1)] editor: impl Editor = editor,
+            #[widget(row=3, cspan=2, handler=controls)] controls: impl Disable = controls,
+            data: Data = data3,
+        }
+        impl {
+            fn selected(&self) -> Option<usize> {
+                self.list.selected_iter().next().cloned()
             }
-            impl {
-                fn controls(&mut self, mgr: &mut Manager, control: Control) -> VoidResponse {
-                    match control {
-                        Control::Create => {
-                            if let Some(item) = self.editor.make_item() {
-                                let (index, update) = self.data.data.create(item);
-                                mgr.trigger_update(update, 0);
-                                self.filter_list.select(index);
-                                *mgr |= self.controls.disable_update_delete(false);
-                            }
-                        }
-                        Control::Update => {
-                            if let Some(index) = self.filter_list.selected() {
-                                if let Some(item) = self.editor.make_item() {
-                                    let update = self.data.data.update(index, item);
-                                    mgr.trigger_update(update, 0);
-                                }
-                            }
-                        }
-                        Control::Delete => {
-                            if let Some(index) = self.filter_list.selected() {
-                                let update = self.data.data.delete(index);
-                                mgr.trigger_update(update, 0);
-                                let any_selected = self.filter_list.select(index);
-                                if any_selected {
-                                    let item = self.data.data.read(index);
-                                    *mgr |= self.editor.set_item(item);
-                                }
-                                *mgr |= self.controls.disable_update_delete(!any_selected);
-                            }
-                        }
-                        Control::Select(key) => {
-                            let item = self.data.data.read(key);
-                            *mgr |= self.editor.set_item(item);
+            fn filter(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {
+                if let Some(index) = self.selected() {
+                    if !self.data.contains_key(&index) {
+                        self.list.clear_selected();
+                        *mgr |= self.editor.clear()
+                            | self.controls.disable_update_delete(true);
+                    }
+                }
+                Response::None
+            }
+            fn select(&mut self, mgr: &mut Manager, msg: ListMsg<usize, VoidMsg>) -> VoidResponse {
+                match msg {
+                    ListMsg::Select(key) => {
+                        let item = self.data.data.read(key);
+                        *mgr |= self.editor.set_item(item)
+                            | self.controls.disable_update_delete(false);
+                    }
+                    _ => (),
+                }
+                Response::None
+            }
+            fn controls(&mut self, mgr: &mut Manager, control: Control) -> VoidResponse {
+                match control {
+                    Control::Create => {
+                        if let Some(item) = self.editor.make_item() {
+                            let (index, update) = self.data.data.create(item);
+                            mgr.trigger_update(update, 0);
+                            let _ = self.list.select(index);
                             *mgr |= self.controls.disable_update_delete(false);
                         }
-                        Control::Filter => {
-                            if let Some(index) = self.filter_list.selected() {
-                                if !self.data.contains_key(&index) {
-                                    self.filter_list.clear_selected();
-                                    *mgr |= self.editor.clear()
-                                        | self.controls.disable_update_delete(true);
-                                }
+                    }
+                    Control::Update => {
+                        if let Some(index) = self.selected() {
+                            if let Some(item) = self.editor.make_item() {
+                                let update = self.data.data.update(index, item);
+                                mgr.trigger_update(update, 0);
                             }
                         }
                     }
-                    Response::None
+                    Control::Delete => {
+                        if let Some(index) = self.selected() {
+                            let update = self.data.data.delete(index);
+                            mgr.trigger_update(update, 0);
+                            let any_selected = self.list.select(index).is_ok();
+                            if any_selected {
+                                let item = self.data.data.read(index);
+                                *mgr |= self.editor.set_item(item);
+                            }
+                            *mgr |= self.controls.disable_update_delete(!any_selected);
+                        }
+                    }
                 }
+                Response::None
             }
-        },
-    ))
+        }
+    };
+
+    Box::new(Window::new("Create, Read, Update, Delete", crud))
 }
