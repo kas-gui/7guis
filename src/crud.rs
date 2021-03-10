@@ -46,9 +46,11 @@ impl Entries {
             u: UpdateHandle::new(),
         }
     }
-    pub fn create(&self, entry: Entry) -> UpdateHandle {
-        self.v.borrow_mut().push(entry);
-        self.u
+    pub fn create(&self, entry: Entry) -> (usize, UpdateHandle) {
+        let mut v = self.v.borrow_mut();
+        let i = v.len();
+        v.push(entry);
+        (i, self.u)
     }
     pub fn read(&self, index: usize) -> Entry {
         self.v.borrow()[index].clone()
@@ -77,6 +79,10 @@ impl ListData for Entries {
 
     fn len(&self) -> usize {
         self.v.borrow().len()
+    }
+
+    fn contains_key(&self, key: &Self::Key) -> bool {
+        *key < self.len()
     }
 
     fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
@@ -135,6 +141,11 @@ trait Editor {
 trait Selected {
     fn selected(&self) -> Option<usize>;
     fn clear_selected(&mut self);
+    fn select(&mut self, index: usize) -> bool;
+}
+
+trait Disable {
+    fn disable_update_delete(&mut self, disable: bool) -> TkAction;
 }
 
 pub fn window() -> Box<dyn kas::Window> {
@@ -169,6 +180,9 @@ pub fn window() -> Box<dyn kas::Window> {
             }
             fn clear_selected(&mut self) {
                 self.list.clear_selected();
+            }
+            fn select(&mut self, index: usize) -> bool {
+                self.list.select(index).is_ok()
             }
         }
     };
@@ -207,9 +221,16 @@ pub fn window() -> Box<dyn kas::Window> {
         #[handler(msg = Control)]
         struct {
             #[widget] _ = TextButton::new_msg("Create", Control::Create),
-            #[widget] _ = TextButton::new_msg("Update", Control::Update),
-            #[widget] _ = TextButton::new_msg("Delete", Control::Delete),
+            #[widget] update = TextButton::new_msg("Update", Control::Update)
+                .with_disabled(true),
+            #[widget] delete = TextButton::new_msg("Delete", Control::Delete)
+                .with_disabled(true),
             #[widget] _ = Filler::maximize(),
+        }
+        impl Disable {
+            fn disable_update_delete(&mut self, disable: bool) -> TkAction {
+                self.update.set_disabled(disable) | self.delete.set_disabled(disable)
+            }
         }
     };
 
@@ -222,17 +243,18 @@ pub fn window() -> Box<dyn kas::Window> {
                 #[widget(row = 0, col = 0, handler = controls)] filter_list: impl Selected =
                     filter_list,
                 #[widget(row = 0, col = 1)] editor: impl Editor = editor,
-                #[widget(row = 1, cspan = 2, handler = controls)] _ = controls,
+                #[widget(row = 1, cspan = 2, handler = controls)] controls: impl Disable = controls,
                 data: Data = data3,
-                next_id: u64 = 0,
             }
             impl {
                 fn controls(&mut self, mgr: &mut Manager, control: Control) -> VoidResponse {
                     match control {
                         Control::Create => {
                             if let Some(item) = self.editor.make_item() {
-                                let update = self.data.data.create(item);
+                                let (index, update) = self.data.data.create(item);
                                 mgr.trigger_update(update, 0);
+                                self.filter_list.select(index);
+                                *mgr |= self.controls.disable_update_delete(false);
                             }
                         }
                         Control::Update => {
@@ -247,17 +269,25 @@ pub fn window() -> Box<dyn kas::Window> {
                             if let Some(index) = self.filter_list.selected() {
                                 let update = self.data.data.delete(index);
                                 mgr.trigger_update(update, 0);
+                                let any_selected = self.filter_list.select(index);
+                                if any_selected {
+                                    let item = self.data.data.read(index);
+                                    *mgr |= self.editor.set_item(item);
+                                }
+                                *mgr |= self.controls.disable_update_delete(!any_selected);
                             }
                         }
                         Control::Select(key) => {
                             let item = self.data.data.read(key);
                             *mgr |= self.editor.set_item(item);
+                            *mgr |= self.controls.disable_update_delete(false);
                         }
                         Control::Filter => {
                             if let Some(index) = self.filter_list.selected() {
-                                if self.data.get_cloned(&index).is_none() {
+                                if !self.data.contains_key(&index) {
                                     self.filter_list.clear_selected();
-                                    *mgr |= self.editor.clear();
+                                    *mgr |= self.editor.clear()
+                                        | self.controls.disable_update_delete(true);
                                 }
                             }
                         }
