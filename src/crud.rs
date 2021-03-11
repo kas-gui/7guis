@@ -11,7 +11,8 @@ use kas::event::{UpdateHandle, VoidResponse};
 use kas::prelude::*;
 use kas::widget::view::{FilteredList, SimpleCaseInsensitiveFilter};
 use kas::widget::view::{ListMsg, ListView, SelectionMode};
-use kas::widget::{EditBox, EditField, EditGuard, Filler, Label, ScrollBars, TextButton, Window};
+use kas::widget::{EditBox, EditField, EditGuard};
+use kas::widget::{Filler, Frame, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Debug)]
@@ -197,7 +198,8 @@ pub fn window() -> Box<dyn kas::Window> {
         #[layout(grid)]
         #[handler(msg = VoidMsg)]
         struct {
-            #[widget(row=0, col=0, handler=filter)] filter = EditBox::new("")
+            #[widget(row=0, col=0)] _ = Label::new("Filter:"),
+            #[widget(row=0, col=1, handler=filter)] filter = EditBox::new("")
                 .on_edit(move |text, mgr| {
                     let filter = SimpleCaseInsensitiveFilter::new(text);
                     let update = data2.set_filter(filter);
@@ -205,11 +207,12 @@ pub fn window() -> Box<dyn kas::Window> {
                     Some(())
                 }
             ),
-            #[widget(row=1, col=0, rspan=2, handler=select)] list:
-                ScrollBars<ListView<Down, Data>> =
-                ScrollBars::new(ListView::new(data).with_selection_mode(SelectionMode::Single)),
-            #[widget(row=1, col=1)] editor: impl Editor = editor,
-            #[widget(row=3, cspan=2, handler=controls)] controls: impl Disable = controls,
+            #[widget(row=1, col=0, cspan=2, rspan=2, handler=select)] list:
+                Frame<ScrollBars<ListView<Down, Data>>> =
+                Frame::new(ScrollBars::new(ListView::new(data)
+                    .with_selection_mode(SelectionMode::Single))),
+            #[widget(row=1, col=3)] editor: impl Editor = editor,
+            #[widget(row=3, cspan=3, handler=controls)] controls: impl Disable = controls,
             data: Data = data3,
         }
         impl {
