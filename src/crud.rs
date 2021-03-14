@@ -5,12 +5,12 @@
 
 //! Create Read Update Delete
 
+use kas::data::{FilteredList, SimpleCaseInsensitiveFilter};
 use kas::data::{ListData, SharedData, SharedDataRec};
 use kas::dir::Down;
-use kas::event::{UpdateHandle, VoidResponse};
+use kas::event::{ChildMsg, VoidResponse};
 use kas::prelude::*;
-use kas::widget::view::{FilteredList, SimpleCaseInsensitiveFilter};
-use kas::widget::view::{ListMsg, ListView, SelectionMode};
+use kas::widget::view::{ListView, SelectionMode};
 use kas::widget::{EditBox, EditField, EditGuard};
 use kas::widget::{Filler, Frame, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
@@ -229,9 +229,9 @@ pub fn window() -> Box<dyn kas::Window> {
                 }
                 Response::None
             }
-            fn select(&mut self, mgr: &mut Manager, msg: ListMsg<usize, VoidMsg>) -> VoidResponse {
+            fn select(&mut self, mgr: &mut Manager, msg: ChildMsg<usize, VoidMsg>) -> VoidResponse {
                 match msg {
-                    ListMsg::Select(key) => {
+                    ChildMsg::Select(key) => {
                         let item = self.data.data.read(key);
                         *mgr |= self.editor.set_item(item)
                             | self.controls.disable_update_delete(false);

@@ -14,14 +14,14 @@ env_logger = "0.8"
 [patch.crates-io.kas]
 #path = '../kas'
 git = "https://github.com/kas-gui/kas"
-rev = "9c0f11c4a992ebdb753ca81203239b79d80cdc85"
+rev = "645475d4120350609678f48654ebb41fbd36acaa"
 
 [patch.crates-io.kas-theme]
 #path = '../kas/kas-theme'
 git = "https://github.com/kas-gui/kas"
-rev = "9c0f11c4a992ebdb753ca81203239b79d80cdc85"
+rev = "645475d4120350609678f48654ebb41fbd36acaa"
 
 [patch.crates-io.kas-wgpu]
 #path = '../kas/kas-wgpu'
 git = "https://github.com/kas-gui/kas"
-rev = "9c0f11c4a992ebdb753ca81203239b79d80cdc85"
+rev = "645475d4120350609678f48654ebb41fbd36acaa"

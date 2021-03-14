@@ -8,7 +8,7 @@
 use kas::event::{Manager, VoidMsg, VoidResponse};
 use kas::macros::make_widget;
 use kas::prelude::*;
-use kas::widget::{Label, Reserve, TextButton, Window};
+use kas::widget::{Label, TextButton, Window};
 
 pub fn window() -> Box<dyn kas::Window> {
     Box::new(Window::new(
@@ -18,13 +18,11 @@ pub fn window() -> Box<dyn kas::Window> {
             #[layout(row)]
             #[handler(msg = VoidMsg)]
             struct {
-                #[widget(halign = centre)] display: impl HasString = Reserve::new(
-                    Label::new("0".to_string()),
-                    |size_handle, axis_info| {
+                #[widget(halign = centre)] display: impl HasString =
+                    Label::new("0".to_string()).reserve(|size_handle, axis_info| {
                         let mut w = Label::new("0000".to_string());
                         w.size_rules(size_handle, axis_info)
-                    }
-                ),
+                    }),
                 #[widget(handler = count)] _ = TextButton::new_msg("Count", ()),
                 counter: usize = 0,
             }
