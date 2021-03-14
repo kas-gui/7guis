@@ -3,6 +3,7 @@ name = "kas-7guis"
 version = "0.1.0"
 authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2018"
+publish = false
 
 [dependencies]
 kas = "0.6"
