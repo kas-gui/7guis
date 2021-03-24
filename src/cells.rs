@@ -5,11 +5,10 @@
 
 //! Create Read Update Delete
 
-use kas::adapter::ReserveP;
 use kas::data::{MatrixData, MatrixDataMut, SharedData, SharedDataRec};
 use kas::prelude::*;
 use kas::widget::view::{Driver, MatrixView};
-use kas::widget::{Label, Window};
+use kas::widget::{EditField, Window};
 use std::collections::HashMap;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
@@ -152,21 +151,17 @@ impl MatrixDataMut for CellData {
     }
 }
 
-fn reserve(size_handle: &mut dyn SizeHandle, _axis: AxisInfo) -> SizeRules {
-    SizeRules::fixed(size_handle.pixels_from_em(5.0).cast_nearest(), (0, 0))
-}
-
 #[derive(Debug)]
 struct CellDriver;
 
 impl Driver<Key, String> for CellDriver {
-    type Widget = ReserveP<Label<String>>;
+    type Widget = EditField;
 
     fn default(&self) -> Self::Widget {
-        Label::new("".to_string()).reserve(reserve)
+        EditField::new("".to_string())
     }
     fn new(&self, _: Key, data: String) -> Self::Widget {
-        Label::new(data).reserve(reserve)
+        EditField::new(data)
     }
 
     fn set(&self, widget: &mut Self::Widget, _: Key, data: String) -> TkAction {
