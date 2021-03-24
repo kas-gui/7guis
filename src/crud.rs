@@ -5,11 +5,11 @@
 
 //! Create Read Update Delete
 
-use kas::data::{FilteredList, SimpleCaseInsensitiveFilter};
-use kas::data::{ListData, SharedData, SharedDataRec};
 use kas::dir::Down;
 use kas::event::{ChildMsg, VoidResponse};
 use kas::prelude::*;
+use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
+use kas::widget::view::{FilteredList, ListData, SimpleCaseInsensitiveFilter};
 use kas::widget::view::{ListView, SelectionMode};
 use kas::widget::{EditBox, EditField, EditGuard};
 use kas::widget::{Filler, Frame, Label, ScrollBars, TextButton, Window};
@@ -68,12 +68,12 @@ impl Entries {
 
 pub type Data = Rc<FilteredList<Entries, SimpleCaseInsensitiveFilter>>;
 
-impl SharedData for Entries {
+impl Updatable for Entries {
     fn update_handle(&self) -> Option<UpdateHandle> {
         Some(self.u)
     }
 }
-impl SharedDataRec for Entries {}
+impl RecursivelyUpdatable for Entries {}
 impl ListData for Entries {
     type Key = usize;
     type Item = String;
@@ -102,6 +102,11 @@ impl ListData for Entries {
             .skip(start)
             .take(limit)
             .collect()
+    }
+}
+impl<K> UpdatableHandler<K, VoidMsg> for Entries {
+    fn handle(&self, _: &K, msg: &VoidMsg) -> Option<UpdateHandle> {
+        match *msg {}
     }
 }
 

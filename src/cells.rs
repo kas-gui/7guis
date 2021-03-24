@@ -5,9 +5,9 @@
 
 //! Create Read Update Delete
 
-use kas::data::{MatrixData, MatrixDataMut, SharedData, SharedDataRec};
 use kas::prelude::*;
-use kas::widget::view::{Driver, MatrixView};
+use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
+use kas::widget::view::{Driver, MatrixData, MatrixDataMut, MatrixView};
 use kas::widget::{EditField, Window};
 use std::collections::HashMap;
 
@@ -95,16 +95,17 @@ impl CellData {
     }
 }
 
-impl SharedData for CellData {
+impl Updatable for CellData {
     fn update_handle(&self) -> Option<UpdateHandle> {
         None
     }
 }
-impl SharedDataRec for CellData {}
+impl RecursivelyUpdatable for CellData {}
 
 impl MatrixData for CellData {
     type ColKey = ColKey;
     type RowKey = u8;
+    type Key = (ColKey, u8);
     type Item = String;
 
     fn col_len(&self) -> usize {
@@ -115,22 +116,21 @@ impl MatrixData for CellData {
         100
     }
 
-    fn contains(&self, _: &Self::ColKey, _: &Self::RowKey) -> bool {
+    fn contains(&self, _: &Self::Key) -> bool {
         // we know both keys are valid and length is fixed
         true
     }
 
-    fn get_cloned(&self, col: &Self::ColKey, row: &Self::RowKey) -> Option<Self::Item> {
-        let key = (*col, *row);
+    fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
         Some(
             self.cells
-                .get(&key)
+                .get(key)
                 .map(|cell| cell.display.clone())
                 .unwrap_or("".to_string()),
         )
     }
 
-    fn update(&self, _: &Self::ColKey, _: &Self::RowKey, _: Self::Item) -> Option<UpdateHandle> {
+    fn update(&self, _: &Self::Key, _: Self::Item) -> Option<UpdateHandle> {
         None
     }
 
@@ -141,35 +141,38 @@ impl MatrixData for CellData {
     fn row_iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::RowKey> {
         (0..=99).skip(start).take(limit).collect()
     }
+
+    fn make_key(col: &Self::ColKey, row: &Self::RowKey) -> Self::Key {
+        (*col, *row)
+    }
 }
 
 impl MatrixDataMut for CellData {
-    fn set(&mut self, col: &Self::ColKey, row: &Self::RowKey, item: Self::Item) {
-        let key = (*col, *row);
+    fn set(&mut self, key: &Self::Key, item: Self::Item) {
         let cell = Cell::new(item, None);
-        self.cells.insert(key, cell);
+        self.cells.insert(*key, cell);
+    }
+}
+
+impl<K> UpdatableHandler<K, VoidMsg> for CellData {
+    fn handle(&self, _: &K, msg: &VoidMsg) -> Option<UpdateHandle> {
+        match *msg {}
     }
 }
 
 #[derive(Debug)]
 struct CellDriver;
 
-impl Driver<Key, String> for CellDriver {
+impl Driver<String> for CellDriver {
+    type Msg = VoidMsg;
     type Widget = EditField;
 
-    fn default(&self) -> Self::Widget {
+    fn new(&self) -> Self::Widget {
         EditField::new("".to_string())
     }
-    fn new(&self, _: Key, data: String) -> Self::Widget {
-        EditField::new(data)
-    }
 
-    fn set(&self, widget: &mut Self::Widget, _: Key, data: String) -> TkAction {
+    fn set(&self, widget: &mut Self::Widget, data: String) -> TkAction {
         widget.set_string(data)
-    }
-
-    fn get(&self, _: &Self::Widget, _: &Key) -> Option<String> {
-        None
     }
 }
 
