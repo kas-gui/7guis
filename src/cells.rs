@@ -8,7 +8,8 @@
 use kas::prelude::*;
 use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
 use kas::widget::view::{Driver, MatrixData, MatrixDataMut, MatrixView};
-use kas::widget::{EditField, Window};
+use kas::widget::{EditField, EditGuard, Window};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
@@ -79,17 +80,19 @@ type Key = (ColKey, u8);
 
 #[derive(Debug)]
 struct CellData {
-    cells: HashMap<Key, Cell>,
+    cells: RefCell<HashMap<Key, Cell>>,
+    update: UpdateHandle,
 }
 
 impl CellData {
     fn new() -> Self {
         CellData {
-            cells: HashMap::new(),
+            cells: RefCell::new(HashMap::new()),
+            update: UpdateHandle::new(),
         }
     }
     fn eval_all(&mut self) {
-        for cell in self.cells.values_mut() {
+        for cell in self.cells.get_mut().values_mut() {
             cell.eval();
         }
     }
@@ -97,7 +100,7 @@ impl CellData {
 
 impl Updatable for CellData {
     fn update_handle(&self) -> Option<UpdateHandle> {
-        None
+        Some(self.update)
     }
 }
 impl RecursivelyUpdatable for CellData {}
@@ -124,6 +127,7 @@ impl MatrixData for CellData {
     fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
         Some(
             self.cells
+                .borrow()
                 .get(key)
                 .map(|cell| cell.display.clone())
                 .unwrap_or("".to_string()),
@@ -150,13 +154,30 @@ impl MatrixData for CellData {
 impl MatrixDataMut for CellData {
     fn set(&mut self, key: &Self::Key, item: Self::Item) {
         let cell = Cell::new(item, None);
-        self.cells.insert(*key, cell);
+        self.cells.get_mut().insert(*key, cell);
     }
 }
 
-impl<K> UpdatableHandler<K, VoidMsg> for CellData {
-    fn handle(&self, _: &K, msg: &VoidMsg) -> Option<UpdateHandle> {
-        match *msg {}
+impl UpdatableHandler<(ColKey, u8), String> for CellData {
+    fn handle(&self, key: &(ColKey, u8), msg: &String) -> Option<UpdateHandle> {
+        let cell = Cell::new(msg.clone(), None); // TODO: formula
+        self.cells.borrow_mut().insert(key.clone(), cell);
+        // TODO: update cells where needed
+        Some(self.update)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CellGuard;
+impl EditGuard for CellGuard {
+    type Msg = String;
+
+    fn activate(edit: &mut EditField<Self>, mgr: &mut Manager) -> Option<Self::Msg> {
+        Self::focus_lost(edit, mgr)
+    }
+
+    fn focus_lost(edit: &mut EditField<Self>, _: &mut Manager) -> Option<Self::Msg> {
+        Some(edit.get_string())
     }
 }
 
@@ -164,11 +185,11 @@ impl<K> UpdatableHandler<K, VoidMsg> for CellData {
 struct CellDriver;
 
 impl Driver<String> for CellDriver {
-    type Msg = VoidMsg;
-    type Widget = EditField;
+    type Msg = String;
+    type Widget = EditField<CellGuard>;
 
     fn new(&self) -> Self::Widget {
-        EditField::new("".to_string())
+        EditField::new("".to_string()).with_guard(CellGuard)
     }
 
     fn set(&self, widget: &mut Self::Widget, data: String) -> TkAction {
@@ -179,8 +200,9 @@ impl Driver<String> for CellDriver {
 pub fn window() -> Box<dyn kas::Window> {
     let mut data = CellData::new();
     data.cells
+        .get_mut()
         .insert((ColKey(b'B'), 0), Cell::new("Example".to_string(), None));
-    data.cells.insert(
+    data.cells.get_mut().insert(
         (ColKey(b'B'), 1),
         Cell::new(
             "= 5 / 2".to_string(),
