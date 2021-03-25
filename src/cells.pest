@@ -1,0 +1,15 @@
+WHITESPACE = _{ " " | "\t" }
+number = @{
+    ("." ~ ASCII_DIGIT+)
+    | (ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)?)
+    ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+}
+value = { number | ("(" ~ expression ~ ")") }
+product_op = { "*" | "/" }
+product = { value ~ (product_op ~ value)* }
+sum_op = { "-" | "+" }
+summation = { sum_op? ~ product ~ (sum_op ~ product)* }
+expression = !{ summation }
+formula = ${ SOI ~ "=" ~ WHITESPACE* ~ expression ~ WHITESPACE* }
+text = @{ !"=" ~ ANY* }
+cell = _{ formula | text }

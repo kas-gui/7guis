@@ -7,7 +7,7 @@
 
 use kas::prelude::*;
 use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
-use kas::widget::view::{Driver, MatrixData, MatrixDataMut, MatrixView};
+use kas::widget::view::{Driver, MatrixData, MatrixView};
 use kas::widget::{EditField, EditGuard, Window};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -28,25 +28,144 @@ impl ColKey {
     }
 }
 
+type Key = (ColKey, u8);
+
 #[derive(Debug, PartialEq)]
 pub enum Formula {
-    Val(f64),
+    Value(f64),
     // Ref(String),
-    Add(Box<Formula>, Box<Formula>),
-    Sub(Box<Formula>, Box<Formula>),
-    Mul(Box<Formula>, Box<Formula>),
-    Div(Box<Formula>, Box<Formula>),
+    /// List of values to add/subtract; if bool is true then subtract
+    Summation(Vec<(Formula, bool)>),
+    /// List of values to multiply/divide; if bool is true then divide
+    Product(Vec<(Formula, bool)>),
 }
 
 impl Formula {
     fn eval(&self) -> f64 {
         use Formula::*;
         match self {
-            Val(x) => *x,
-            Add(f, g) => f.eval() + g.eval(),
-            Sub(f, g) => f.eval() - g.eval(),
-            Mul(f, g) => f.eval() * g.eval(),
-            Div(f, g) => f.eval() / g.eval(),
+            Value(x) => *x,
+            Summation(v) => v.iter().fold(0.0, |sum, (f, neg)| {
+                let x = f.eval();
+                if *neg {
+                    sum - x
+                } else {
+                    sum + x
+                }
+            }),
+            Product(v) => v.iter().fold(1.0, |prod, (f, div)| {
+                let x = f.eval();
+                if *div {
+                    prod / x
+                } else {
+                    prod * x
+                }
+            }),
+        }
+    }
+}
+
+mod parser {
+    use super::Formula;
+    use pest::iterators::Pairs;
+    use pest::Parser;
+    use pest_derive::Parser;
+
+    #[derive(Parser)]
+    #[grammar = "cells.pest"]
+    pub struct FormulaParser;
+
+    fn parse_value<'a>(mut pairs: Pairs<'a, Rule>) -> Formula {
+        let pair = pairs.next().unwrap();
+        assert!(pairs.next().is_none());
+        match pair.as_rule() {
+            Rule::number => Formula::Value(pair.as_span().as_str().parse().unwrap()),
+            Rule::expression => parse_expression(pair.into_inner()),
+            _ => unreachable!(),
+        }
+    }
+
+    fn parse_product<'a>(mut pairs: Pairs<'a, Rule>) -> Formula {
+        let mut product = vec![];
+        let mut div = false;
+        while let Some(pair) = pairs.next() {
+            match pair.as_rule() {
+                Rule::product_op => {
+                    if pair.as_span().as_str() == "/" {
+                        div = true;
+                    }
+                }
+                Rule::value => {
+                    let formula = parse_value(pair.into_inner());
+                    product.push((formula, div));
+                    div = false;
+                }
+                _ => unreachable!(),
+            }
+        }
+        debug_assert!(div == false);
+        if product.len() == 1 {
+            debug_assert!(product[0].1 == false);
+            product.pop().unwrap().0
+        } else {
+            debug_assert!(product.len() > 1);
+            Formula::Product(product)
+        }
+    }
+
+    fn parse_summation<'a>(mut pairs: Pairs<'a, Rule>) -> Formula {
+        let mut summation = vec![];
+        let mut sub = false;
+        while let Some(pair) = pairs.next() {
+            match pair.as_rule() {
+                Rule::sum_op => {
+                    if pair.as_span().as_str() == "-" {
+                        sub = true;
+                    }
+                }
+                Rule::product => {
+                    let formula = parse_product(pair.into_inner());
+                    summation.push((formula, sub));
+                    sub = false;
+                }
+                _ => unreachable!(),
+            }
+        }
+        debug_assert!(sub == false);
+        if summation.len() == 1 && summation[0].1 == false {
+            summation.pop().unwrap().0
+        } else {
+            debug_assert!(summation.len() > 1);
+            Formula::Summation(summation)
+        }
+    }
+
+    fn parse_expression<'a>(mut pairs: Pairs<'a, Rule>) -> Formula {
+        let pair = pairs.next().unwrap();
+        assert!(pairs.next().is_none());
+        assert_eq!(pair.as_rule(), Rule::expression);
+        let mut pairs = pair.into_inner();
+
+        let pair = pairs.next().unwrap();
+        assert!(pairs.next().is_none());
+        assert_eq!(pair.as_rule(), Rule::summation);
+        parse_summation(pair.into_inner())
+    }
+
+    pub fn parse(source: &str) -> Result<Option<Formula>, ()> {
+        match FormulaParser::parse(Rule::cell, source) {
+            Ok(mut pairs) => {
+                let pair = pairs.next().unwrap();
+                Ok(match pair.as_rule() {
+                    Rule::formula => Some(parse_expression(pair.into_inner())),
+                    Rule::text => None,
+                    _ => unreachable!(),
+                })
+            }
+            Err(error) => {
+                println!("Error: {}", error);
+                Err(())
+            }
         }
     }
 }
@@ -55,15 +174,18 @@ impl Formula {
 struct Cell {
     input: String,
     formula: Option<Formula>,
+    parse_error: bool,
     display: String,
 }
 
 impl Cell {
-    // TODO: construct formula from input string instead
-    fn new(input: String, formula: Option<Formula>) -> Self {
+    fn new(input: String) -> Self {
+        let result = parser::parse(&input);
+        let parse_error = result.is_err();
         Cell {
             input,
-            formula,
+            formula: result.ok().flatten(),
+            parse_error,
             display: String::new(),
         }
     }
@@ -75,8 +197,6 @@ impl Cell {
         };
     }
 }
-
-type Key = (ColKey, u8);
 
 #[derive(Debug)]
 struct CellData {
@@ -109,7 +229,7 @@ impl MatrixData for CellData {
     type ColKey = ColKey;
     type RowKey = u8;
     type Key = (ColKey, u8);
-    type Item = String;
+    type Item = (String, bool);
 
     fn col_len(&self) -> usize {
         ColKey::LEN.cast()
@@ -129,8 +249,8 @@ impl MatrixData for CellData {
             self.cells
                 .borrow()
                 .get(key)
-                .map(|cell| cell.display.clone())
-                .unwrap_or("".to_string()),
+                .map(|cell| (cell.display.clone(), cell.parse_error))
+                .unwrap_or(("".to_string(), false)),
         )
     }
 
@@ -151,16 +271,10 @@ impl MatrixData for CellData {
     }
 }
 
-impl MatrixDataMut for CellData {
-    fn set(&mut self, key: &Self::Key, item: Self::Item) {
-        let cell = Cell::new(item, None);
-        self.cells.get_mut().insert(*key, cell);
-    }
-}
-
 impl UpdatableHandler<(ColKey, u8), String> for CellData {
     fn handle(&self, key: &(ColKey, u8), msg: &String) -> Option<UpdateHandle> {
-        let cell = Cell::new(msg.clone(), None); // TODO: formula
+        let mut cell = Cell::new(msg.clone());
+        cell.eval();
         self.cells.borrow_mut().insert(key.clone(), cell);
         // TODO: update cells where needed
         Some(self.update)
@@ -184,7 +298,7 @@ impl EditGuard for CellGuard {
 #[derive(Debug)]
 struct CellDriver;
 
-impl Driver<String> for CellDriver {
+impl Driver<(String, bool)> for CellDriver {
     type Msg = String;
     type Widget = EditField<CellGuard>;
 
@@ -192,8 +306,9 @@ impl Driver<String> for CellDriver {
         EditField::new("".to_string()).with_guard(CellGuard)
     }
 
-    fn set(&self, widget: &mut Self::Widget, data: String) -> TkAction {
-        widget.set_string(data)
+    fn set(&self, widget: &mut Self::Widget, data: (String, bool)) -> TkAction {
+        widget.set_error_state(data.1);
+        widget.set_string(data.0)
     }
 }
 
@@ -201,17 +316,10 @@ pub fn window() -> Box<dyn kas::Window> {
     let mut data = CellData::new();
     data.cells
         .get_mut()
-        .insert((ColKey(b'B'), 0), Cell::new("Example".to_string(), None));
-    data.cells.get_mut().insert(
-        (ColKey(b'B'), 1),
-        Cell::new(
-            "= 5 / 2".to_string(),
-            Some(Formula::Div(
-                Box::new(Formula::Val(5.0)),
-                Box::new(Formula::Val(2.0)),
-            )),
-        ),
-    );
+        .insert((ColKey(b'B'), 0), Cell::new("Example".to_string()));
+    data.cells
+        .get_mut()
+        .insert((ColKey(b'B'), 1), Cell::new("= 5 / 2".to_string()));
     data.eval_all();
 
     let view = CellDriver;
