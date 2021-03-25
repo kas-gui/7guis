@@ -16,14 +16,14 @@ pest_derive = "2.1"
 [patch.crates-io.kas]
 #path = '../kas'
 git = "https://github.com/kas-gui/kas"
-rev = "d38da1a71950f4a2fabfaa3e7ced4f9651f3c9b1"
+rev = "8cd56bb35635e28aeda3a6358d8f47039fd0fb53"
 
 [patch.crates-io.kas-theme]
 #path = '../kas/kas-theme'
 git = "https://github.com/kas-gui/kas"
-rev = "d38da1a71950f4a2fabfaa3e7ced4f9651f3c9b1"
+rev = "8cd56bb35635e28aeda3a6358d8f47039fd0fb53"
 
 [patch.crates-io.kas-wgpu]
 #path = '../kas/kas-wgpu'
 git = "https://github.com/kas-gui/kas"
-rev = "d38da1a71950f4a2fabfaa3e7ced4f9651f3c9b1"
+rev = "8cd56bb35635e28aeda3a6358d8f47039fd0fb53"
