@@ -229,7 +229,8 @@ impl MatrixData for CellData {
     type ColKey = ColKey;
     type RowKey = u8;
     type Key = (ColKey, u8);
-    type Item = (String, bool);
+    /// Item is (input_string, display_string, error_state)
+    type Item = (String, String, bool);
 
     fn col_len(&self) -> usize {
         ColKey::LEN.cast()
@@ -249,8 +250,8 @@ impl MatrixData for CellData {
             self.cells
                 .borrow()
                 .get(key)
-                .map(|cell| (cell.display.clone(), cell.parse_error))
-                .unwrap_or(("".to_string(), false)),
+                .map(|cell| (cell.input.clone(), cell.display.clone(), cell.parse_error))
+                .unwrap_or(("".to_string(), "".to_string(), false)),
         )
     }
 
@@ -281,13 +282,22 @@ impl UpdatableHandler<(ColKey, u8), String> for CellData {
     }
 }
 
-#[derive(Clone, Debug)]
-struct CellGuard;
+#[derive(Clone, Default, Debug)]
+struct CellGuard {
+    input: String,
+}
 impl EditGuard for CellGuard {
     type Msg = String;
 
     fn activate(edit: &mut EditField<Self>, mgr: &mut Manager) -> Option<Self::Msg> {
         Self::focus_lost(edit, mgr)
+    }
+
+    fn focus_gained(edit: &mut EditField<Self>, mgr: &mut Manager) -> Option<Self::Msg> {
+        let mut s = String::default();
+        std::mem::swap(&mut edit.guard.input, &mut s);
+        *mgr |= edit.set_string(s);
+        None
     }
 
     fn focus_lost(edit: &mut EditField<Self>, _: &mut Manager) -> Option<Self::Msg> {
@@ -298,17 +308,23 @@ impl EditGuard for CellGuard {
 #[derive(Debug)]
 struct CellDriver;
 
-impl Driver<(String, bool)> for CellDriver {
+impl Driver<(String, String, bool)> for CellDriver {
     type Msg = String;
     type Widget = EditField<CellGuard>;
 
     fn new(&self) -> Self::Widget {
-        EditField::new("".to_string()).with_guard(CellGuard)
+        EditField::new("".to_string()).with_guard(CellGuard::default())
     }
 
-    fn set(&self, widget: &mut Self::Widget, data: (String, bool)) -> TkAction {
-        widget.set_error_state(data.1);
-        widget.set_string(data.0)
+    fn set(&self, edit: &mut Self::Widget, data: (String, String, bool)) -> TkAction {
+        edit.guard.input = data.0;
+        edit.set_error_state(data.2);
+        if edit.has_key_focus() {
+            // assume that the contents of the EditField are the latest
+            TkAction::empty()
+        } else {
+            edit.set_string(data.1)
+        }
     }
 }
 
