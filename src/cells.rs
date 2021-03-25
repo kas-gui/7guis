@@ -339,7 +339,9 @@ pub fn window() -> Box<dyn kas::Window> {
     data.eval_all();
 
     let view = CellDriver;
-    let cells = MatrixView::new_with_driver(view, data).map_msg_discard::<VoidMsg>();
+    let cells = MatrixView::new_with_driver(view, data)
+        .with_num_visible(5, 20)
+        .map_msg_discard::<VoidMsg>();
 
     Box::new(Window::new("Cells", cells))
 }
