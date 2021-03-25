@@ -3,7 +3,7 @@
 // You may obtain a copy of the License in the LICENSE-APACHE file or at:
 //     https://www.apache.org/licenses/LICENSE-2.0
 
-//! Create Read Update Delete
+//! Cells: a mini spreadsheet
 
 use kas::prelude::*;
 use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
@@ -11,9 +11,10 @@ use kas::widget::view::{Driver, MatrixData, MatrixView};
 use kas::widget::{EditField, EditGuard, Window};
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-struct ColKey(u8);
+pub struct ColKey(u8);
 impl ColKey {
     const LEN: u8 = 26;
     fn try_from_u8(n: u8) -> Option<Self> {
@@ -28,12 +29,25 @@ impl ColKey {
     }
 }
 
-type Key = (ColKey, u8);
+impl fmt::Display for ColKey {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let b = [self.0];
+        write!(f, "{}", std::str::from_utf8(&b).unwrap())
+    }
+}
+
+pub type Key = (ColKey, u8);
+
+#[derive(Debug, PartialEq, Eq)]
+enum EvalError {
+    /// Value we depend on is missing
+    Dependancy,
+}
 
 #[derive(Debug, PartialEq)]
 pub enum Formula {
     Value(f64),
-    // Ref(String),
+    Reference(Key),
     /// List of values to add/subtract; if bool is true then subtract
     Summation(Vec<(Formula, bool)>),
     /// List of values to multiply/divide; if bool is true then divide
@@ -41,32 +55,41 @@ pub enum Formula {
 }
 
 impl Formula {
-    fn eval(&self) -> f64 {
+    fn eval(&self, values: &HashMap<Key, f64>) -> Result<f64, EvalError> {
         use Formula::*;
-        match self {
+        Ok(match self {
             Value(x) => *x,
-            Summation(v) => v.iter().fold(0.0, |sum, (f, neg)| {
-                let x = f.eval();
-                if *neg {
-                    sum - x
-                } else {
-                    sum + x
+            Reference(key) => return values.get(key).cloned().ok_or(EvalError::Dependancy),
+            Summation(v) => {
+                let mut sum = 0.0;
+                for (f, neg) in v {
+                    let x = f.eval(values)?;
+                    if *neg {
+                        sum -= x;
+                    } else {
+                        sum += x;
+                    }
                 }
-            }),
-            Product(v) => v.iter().fold(1.0, |prod, (f, div)| {
-                let x = f.eval();
-                if *div {
-                    prod / x
-                } else {
-                    prod * x
+                sum
+            }
+            Product(v) => {
+                let mut prod = 1.0;
+                for (f, div) in v {
+                    let x = f.eval(values)?;
+                    if *div {
+                        prod /= x;
+                    } else {
+                        prod *= x;
+                    }
                 }
-            }),
-        }
+                prod
+            }
+        })
     }
 }
 
 mod parser {
-    use super::Formula;
+    use super::{ColKey, Formula};
     use pest::iterators::Pairs;
     use pest::Parser;
     use pest_derive::Parser;
@@ -80,6 +103,18 @@ mod parser {
         assert!(pairs.next().is_none());
         match pair.as_rule() {
             Rule::number => Formula::Value(pair.as_span().as_str().parse().unwrap()),
+            Rule::reference => {
+                let s = pair.as_span().as_str();
+                assert!(s.len() >= 2);
+                let mut col = s.as_bytes()[0];
+                if col > b'Z' {
+                    col -= b'a' - b'A';
+                }
+                let col = ColKey::try_from_u8(col).unwrap();
+                let row = s[1..].parse().unwrap();
+                let key = (col, row);
+                Formula::Reference(key)
+            }
             Rule::expression => parse_expression(pair.into_inner()),
             _ => unreachable!(),
         }
@@ -189,31 +224,95 @@ impl Cell {
             display: String::new(),
         }
     }
-    fn eval(&mut self) {
-        self.display = if let Some(ref f) = self.formula {
-            f.eval().to_string()
+
+    /// Get display string
+    fn display(&self) -> String {
+        if self.display.len() > 0 {
+            self.display.clone()
         } else {
             self.input.clone()
-        };
+        }
+    }
+
+    fn try_eval(&mut self, values: &HashMap<Key, f64>) -> Result<Option<f64>, EvalError> {
+        if let Some(ref f) = self.formula {
+            let value = f.eval(values)?;
+            self.display = value.to_string();
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+#[derive(Debug)]
+struct CellDataInner {
+    cells: HashMap<Key, Cell>,
+    values: HashMap<Key, f64>,
+}
+
+impl CellDataInner {
+    fn new() -> Self {
+        CellDataInner {
+            cells: HashMap::new(),
+            values: HashMap::new(),
+        }
+    }
+    fn update_values(&mut self) {
+        // NOTE: this is a fairly naive algorithm, but correct!
+        self.values.clear();
+
+        let mut waiting = vec![];
+        for (key, cell) in self.cells.iter_mut() {
+            match cell.try_eval(&self.values) {
+                Ok(Some(value)) => {
+                    self.values.insert(*key, value);
+                }
+                Ok(None) => (),
+                Err(EvalError::Dependancy) => waiting.push(*key),
+            }
+        }
+
+        let mut remaining = waiting.len();
+        let mut queue = vec![];
+
+        while remaining > 0 {
+            std::mem::swap(&mut waiting, &mut queue);
+            for key in queue.drain(..) {
+                let cell = self.cells.get_mut(&key).unwrap();
+                match cell.try_eval(&self.values) {
+                    Ok(Some(value)) => {
+                        self.values.insert(key, value);
+                    }
+                    Ok(None) => (),
+                    Err(EvalError::Dependancy) => waiting.push(key),
+                }
+            }
+
+            if waiting.len() >= remaining {
+                for key in waiting.drain(..) {
+                    let cell = self.cells.get_mut(&key).unwrap();
+                    cell.display = "Ref error".to_string();
+                }
+                return;
+            } else {
+                remaining = waiting.len();
+            }
+        }
     }
 }
 
 #[derive(Debug)]
 struct CellData {
-    cells: RefCell<HashMap<Key, Cell>>,
+    inner: RefCell<CellDataInner>,
     update: UpdateHandle,
 }
 
 impl CellData {
     fn new() -> Self {
         CellData {
-            cells: RefCell::new(HashMap::new()),
+            inner: RefCell::new(CellDataInner::new()),
             update: UpdateHandle::new(),
-        }
-    }
-    fn eval_all(&mut self) {
-        for cell in self.cells.get_mut().values_mut() {
-            cell.eval();
         }
     }
 }
@@ -246,11 +345,10 @@ impl MatrixData for CellData {
     }
 
     fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
+        let inner = self.inner.borrow();
+        let cell = inner.cells.get(key);
         Some(
-            self.cells
-                .borrow()
-                .get(key)
-                .map(|cell| (cell.input.clone(), cell.display.clone(), cell.parse_error))
+            cell.map(|cell| (cell.input.clone(), cell.display().clone(), cell.parse_error))
                 .unwrap_or(("".to_string(), "".to_string(), false)),
         )
     }
@@ -274,10 +372,11 @@ impl MatrixData for CellData {
 
 impl UpdatableHandler<(ColKey, u8), String> for CellData {
     fn handle(&self, key: &(ColKey, u8), msg: &String) -> Option<UpdateHandle> {
-        let mut cell = Cell::new(msg.clone());
-        cell.eval();
-        self.cells.borrow_mut().insert(key.clone(), cell);
-        // TODO: update cells where needed
+        let cell = Cell::new(msg.clone());
+        let mut inner = self.inner.borrow_mut();
+        inner.cells.insert(key.clone(), cell);
+        // TODO: we should not recompute everything here!
+        inner.update_values();
         Some(self.update)
     }
 }
@@ -330,13 +429,14 @@ impl Driver<(String, String, bool)> for CellDriver {
 
 pub fn window() -> Box<dyn kas::Window> {
     let mut data = CellData::new();
-    data.cells
-        .get_mut()
+    let inner = data.inner.get_mut();
+    inner
+        .cells
         .insert((ColKey(b'B'), 0), Cell::new("Example".to_string()));
-    data.cells
-        .get_mut()
+    inner
+        .cells
         .insert((ColKey(b'B'), 1), Cell::new("= 5 / 2".to_string()));
-    data.eval_all();
+    inner.update_values();
 
     let view = CellDriver;
     let cells = MatrixView::new_with_driver(view, data)

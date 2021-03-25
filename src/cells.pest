@@ -4,7 +4,8 @@ number = @{
     | (ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)?)
     ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
 }
-value = { number | ("(" ~ expression ~ ")") }
+reference = @{ ASCII_ALPHA ~ ASCII_DIGIT+ }
+value = { number | reference | ("(" ~ expression ~ ")") }
 product_op = { "*" | "/" }
 product = { value ~ (product_op ~ value)* }
 sum_op = { "-" | "+" }
