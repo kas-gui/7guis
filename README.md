@@ -29,6 +29,7 @@ Next, clone the repository:
 ```
 git clone https://github.com/kas-gui/7guis
 cd 7guis
+cargo run
 ```
 
 Tasks
@@ -38,21 +39,60 @@ A brief list of the implemented tasks:
 
 ### Counter
 
-```
-cargo run --bin counter
-```
-
 A very simple push-button application.
+
+![Counter](screenshots/counter.png)
 
 ### Temperature Converter
 
-```
-cargo run --bin temp-conv
-```
-
 An application to convert between Celsius and Fahrenheit temperatures.
 
-Note: for now, one must press the *Enter* key to invoke the calculation.
+![Temperature converter](screenshots/temp-conv.png)
+
+### Flight booker
+
+An application to gather date inputs, with real-time validation of input fields.
+
+![Flight booker](screenshots/flight-booker.png)
+
+### Timer
+
+A timer with animations and slightly-complex event handling.
+
+![Timer](screenshots/timer.png)
+
+### CRUD
+
+A simple front-end to a shared data-set supporting Create, Read, Update and
+Delete operations as well as filtering.
+
+![CRUD](screenshots/crud.png)
+
+### Circle drawer
+
+An app for drawing circles with unified undo handling.
+
+Not implemented yet. At the time of writing, KAS lacks context menus and
+universal "undo" support (the drawing API is also a bit primitive, though
+still sufficient for this example).
+
+### Cells
+
+A simple spreadsheet application.
+
+Partially implemented:
+
+-   matrix view over matrix data: done
+-   formula parsing and evaluation: done (but very limited since writing a DSL
+    is not the point of the challenge)
+-   cell referencing and dependencies: done, but inefficient approach
+-   drawing row/column labels: not done
+-   drawing pretty cell dividers: not done
+-   drawing cell background (highlight / error state): not done
+-   cell selection and keyboard navigation: partial impl but not usable
+-   select/copy/paste/delete cell ranges: not done
+
+![Cells](screenshots/cells.png)
 
 
 Copyright and Licence

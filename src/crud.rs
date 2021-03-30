@@ -5,13 +5,14 @@
 
 //! Create Read Update Delete
 
-use kas::data::{ListData, SharedData, SharedDataRec};
 use kas::dir::Down;
-use kas::event::{UpdateHandle, VoidResponse};
+use kas::event::{ChildMsg, VoidResponse};
 use kas::prelude::*;
-use kas::widget::view::{FilteredList, SimpleCaseInsensitiveFilter};
-use kas::widget::view::{ListMsg, ListView, SelectionMode};
-use kas::widget::{EditBox, EditField, EditGuard, Filler, Label, ScrollBars, TextButton, Window};
+use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
+use kas::widget::view::{FilteredList, ListData, SimpleCaseInsensitiveFilter};
+use kas::widget::view::{ListView, SelectionMode};
+use kas::widget::{EditBox, EditField, EditGuard};
+use kas::widget::{Filler, Frame, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Debug)]
@@ -67,12 +68,12 @@ impl Entries {
 
 pub type Data = Rc<FilteredList<Entries, SimpleCaseInsensitiveFilter>>;
 
-impl SharedData for Entries {
+impl Updatable for Entries {
     fn update_handle(&self) -> Option<UpdateHandle> {
         Some(self.u)
     }
 }
-impl SharedDataRec for Entries {}
+impl RecursivelyUpdatable for Entries {}
 impl ListData for Entries {
     type Key = usize;
     type Item = String;
@@ -101,6 +102,11 @@ impl ListData for Entries {
             .skip(start)
             .take(limit)
             .collect()
+    }
+}
+impl<K> UpdatableHandler<K, VoidMsg> for Entries {
+    fn handle(&self, _: &K, msg: &VoidMsg) -> Option<UpdateHandle> {
+        match *msg {}
     }
 }
 
@@ -197,7 +203,8 @@ pub fn window() -> Box<dyn kas::Window> {
         #[layout(grid)]
         #[handler(msg = VoidMsg)]
         struct {
-            #[widget(row=0, col=0, handler=filter)] filter = EditBox::new("")
+            #[widget(row=0, col=0)] _ = Label::new("Filter:"),
+            #[widget(row=0, col=1, handler=filter)] filter = EditBox::new("")
                 .on_edit(move |text, mgr| {
                     let filter = SimpleCaseInsensitiveFilter::new(text);
                     let update = data2.set_filter(filter);
@@ -205,11 +212,12 @@ pub fn window() -> Box<dyn kas::Window> {
                     Some(())
                 }
             ),
-            #[widget(row=1, col=0, rspan=2, handler=select)] list:
-                ScrollBars<ListView<Down, Data>> =
-                ScrollBars::new(ListView::new(data).with_selection_mode(SelectionMode::Single)),
-            #[widget(row=1, col=1)] editor: impl Editor = editor,
-            #[widget(row=3, cspan=2, handler=controls)] controls: impl Disable = controls,
+            #[widget(row=1, col=0, cspan=2, rspan=2, handler=select)] list:
+                Frame<ScrollBars<ListView<Down, Data>>> =
+                Frame::new(ScrollBars::new(ListView::new(data)
+                    .with_selection_mode(SelectionMode::Single))),
+            #[widget(row=1, col=3)] editor: impl Editor = editor,
+            #[widget(row=3, cspan=3, handler=controls)] controls: impl Disable = controls,
             data: Data = data3,
         }
         impl {
@@ -226,9 +234,9 @@ pub fn window() -> Box<dyn kas::Window> {
                 }
                 Response::None
             }
-            fn select(&mut self, mgr: &mut Manager, msg: ListMsg<usize, VoidMsg>) -> VoidResponse {
+            fn select(&mut self, mgr: &mut Manager, msg: ChildMsg<usize, VoidMsg>) -> VoidResponse {
                 match msg {
-                    ListMsg::Select(key) => {
+                    ChildMsg::Select(key) => {
                         let item = self.data.data.read(key);
                         *mgr |= self.editor.set_item(item)
                             | self.controls.disable_update_delete(false);

@@ -3,24 +3,27 @@ name = "kas-7guis"
 version = "0.1.0"
 authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2018"
+publish = false
 
 [dependencies]
 kas = "0.6"
 kas-wgpu = "0.6"
 chrono = "0.4"
 env_logger = "0.8"
+pest = "2.1"
+pest_derive = "2.1"
 
 [patch.crates-io.kas]
 #path = '../kas'
 git = "https://github.com/kas-gui/kas"
-rev = "9c0f11c4a992ebdb753ca81203239b79d80cdc85"
+rev = "8cd56bb35635e28aeda3a6358d8f47039fd0fb53"
 
 [patch.crates-io.kas-theme]
 #path = '../kas/kas-theme'
 git = "https://github.com/kas-gui/kas"
-rev = "9c0f11c4a992ebdb753ca81203239b79d80cdc85"
+rev = "8cd56bb35635e28aeda3a6358d8f47039fd0fb53"
 
 [patch.crates-io.kas-wgpu]
 #path = '../kas/kas-wgpu'
 git = "https://github.com/kas-gui/kas"
-rev = "9c0f11c4a992ebdb753ca81203239b79d80cdc85"
+rev = "8cd56bb35635e28aeda3a6358d8f47039fd0fb53"
