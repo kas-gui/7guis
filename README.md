@@ -80,11 +80,19 @@ still sufficient for this example).
 
 A simple spreadsheet application.
 
-Not implemented yet. At the time of writing, KAS lacks a table / grid-data view
-(this is just a slightly more complex variant of the `ListView` widget used in
-the CRUD example). Also requires change-propegation code to update cells, but
-this is not related to GUI code (the widgets should simply be a view over the
-dataset and not responsible for change propegation).
+Partially implemented:
+
+-   matrix view over matrix data: done
+-   formula parsing and evaluation: done (but very limited since writing a DSL
+    is not the point of the challenge)
+-   cell referencing and dependencies: done, but inefficient approach
+-   drawing row/column labels: not done
+-   drawing pretty cell dividers: not done
+-   drawing cell background (highlight / error state): not done
+-   cell selection and keyboard navigation: partial impl but not usable
+-   select/copy/paste/delete cell ranges: not done
+
+![Cells](screenshots/cells.png)
 
 
 Copyright and Licence
