@@ -8,7 +8,7 @@
 use kas::prelude::*;
 use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
 use kas::widget::view::{Driver, MatrixData, MatrixView};
-use kas::widget::{EditField, EditGuard, Window};
+use kas::widget::{EditBox, EditField, EditGuard, Window};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -409,17 +409,20 @@ struct CellDriver;
 
 impl Driver<(String, String, bool)> for CellDriver {
     type Msg = String;
-    type Widget = EditField<CellGuard>;
+    // TODO: we should use EditField instead of EditBox but:
+    // (a) there is currently no code to draw separators between cells
+    // (b) EditField relies on a parent (EditBox) to draw background highlight on error state
+    type Widget = EditBox<CellGuard>;
 
     fn new(&self) -> Self::Widget {
-        EditField::new("".to_string()).with_guard(CellGuard::default())
+        EditBox::new("".to_string()).with_guard(CellGuard::default())
     }
 
     fn set(&self, edit: &mut Self::Widget, data: (String, String, bool)) -> TkAction {
         edit.guard.input = data.0;
         edit.set_error_state(data.2);
         if edit.has_key_focus() {
-            // assume that the contents of the EditField are the latest
+            // assume that the contents of the EditBox are the latest
             TkAction::empty()
         } else {
             edit.set_string(data.1)
