@@ -38,6 +38,12 @@ impl fmt::Display for ColKey {
 
 pub type Key = (ColKey, u8);
 
+fn make_key(k: &str) -> Key {
+    let col = ColKey::try_from_u8(k.as_bytes()[0]).unwrap();
+    let row: u8 = k[1..].parse().unwrap();
+    (col, row)
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum EvalError {
     /// Value we depend on is missing
@@ -214,7 +220,8 @@ struct Cell {
 }
 
 impl Cell {
-    fn new(input: String) -> Self {
+    fn new<T: ToString>(input: T) -> Self {
+        let input = input.to_string();
         let result = parser::parse(&input);
         let parse_error = result.is_err();
         Cell {
@@ -240,7 +247,7 @@ impl Cell {
             self.display = value.to_string();
             Ok(Some(value))
         } else {
-            Ok(None)
+            Ok(self.input.parse().ok())
         }
     }
 }
@@ -362,7 +369,9 @@ impl MatrixData for CellData {
     }
 
     fn row_iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::RowKey> {
-        (0..=99).skip(start).take(limit).collect()
+        // NOTE: for strict compliance with the 7GUIs challenge the rows should
+        // start from 0, but any other spreadsheet I've seen starts from 1!
+        (1..=99).skip(start).take(limit).collect()
     }
 
     fn make_key(col: &Self::ColKey, row: &Self::RowKey) -> Self::Key {
@@ -372,7 +381,7 @@ impl MatrixData for CellData {
 
 impl UpdatableHandler<(ColKey, u8), String> for CellData {
     fn handle(&self, key: &(ColKey, u8), msg: &String) -> Option<UpdateHandle> {
-        let cell = Cell::new(msg.clone());
+        let cell = Cell::new(msg);
         let mut inner = self.inner.borrow_mut();
         inner.cells.insert(key.clone(), cell);
         // TODO: we should not recompute everything here!
@@ -433,12 +442,18 @@ impl Driver<(String, String, bool)> for CellDriver {
 pub fn window() -> Box<dyn kas::Window> {
     let mut data = CellData::new();
     let inner = data.inner.get_mut();
+    inner.cells.insert(make_key("A1"), Cell::new("Some values"));
+    inner.cells.insert(make_key("A2"), Cell::new("3"));
+    inner.cells.insert(make_key("A3"), Cell::new("4"));
+    inner.cells.insert(make_key("A4"), Cell::new("5"));
+    inner.cells.insert(make_key("B1"), Cell::new("Sum"));
     inner
         .cells
-        .insert((ColKey(b'B'), 0), Cell::new("Example".to_string()));
+        .insert(make_key("B2"), Cell::new("= A2 + A3 + A4"));
+    inner.cells.insert(make_key("C1"), Cell::new("Prod"));
     inner
         .cells
-        .insert((ColKey(b'B'), 1), Cell::new("= 5 / 2".to_string()));
+        .insert(make_key("C2"), Cell::new("= A2 * A3 * A4"));
     inner.update_values();
 
     let view = CellDriver;
