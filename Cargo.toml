@@ -6,24 +6,24 @@ edition = "2018"
 publish = false
 
 [dependencies]
-kas = "0.6"
-kas-wgpu = "0.6"
+kas = "0.7"
+kas-wgpu = "0.7"
 chrono = "0.4"
 env_logger = "0.8"
 pest = "2.1"
 pest_derive = "2.1"
 
-[patch.crates-io.kas]
+#[patch.crates-io.kas]
 #path = '../kas'
-git = "https://github.com/kas-gui/kas"
-rev = "e0b7144ce636d900e33c93321319972920a7303a"
+#git = "https://github.com/kas-gui/kas"
+#rev = "e0b7144ce636d900e33c93321319972920a7303a"
 
-[patch.crates-io.kas-theme]
+#[patch.crates-io.kas-theme]
 #path = '../kas/kas-theme'
-git = "https://github.com/kas-gui/kas"
-rev = "e0b7144ce636d900e33c93321319972920a7303a"
+#git = "https://github.com/kas-gui/kas"
+#rev = "e0b7144ce636d900e33c93321319972920a7303a"
 
-[patch.crates-io.kas-wgpu]
+#[patch.crates-io.kas-wgpu]
 #path = '../kas/kas-wgpu'
-git = "https://github.com/kas-gui/kas"
-rev = "e0b7144ce636d900e33c93321319972920a7303a"
+#git = "https://github.com/kas-gui/kas"
+#rev = "e0b7144ce636d900e33c93321319972920a7303a"
