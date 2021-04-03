@@ -19,7 +19,7 @@ pub fn window() -> Box<dyn kas::Window> {
             #[handler(msg = VoidMsg)]
             struct {
                 #[widget(halign = centre)] display: impl HasString =
-                    Label::new("0".to_string()).reserve(|size_handle, axis_info| {
+                    Label::new("0".to_string()).with_reserve(|size_handle, axis_info| {
                         let mut w = Label::new("0000".to_string());
                         w.size_rules(size_handle, axis_info)
                     }),
