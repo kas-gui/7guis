@@ -4,7 +4,6 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 //! 7-GUIs launcher
-#![feature(proc_macro_hygiene)]
 
 mod cells;
 mod counter;

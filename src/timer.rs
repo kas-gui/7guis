@@ -26,18 +26,17 @@ pub fn window() -> Box<dyn kas::Window> {
             struct {
                 #[widget] progress: ProgressBar<Right> = ProgressBar::new(),
                 #[widget] elapsed: Label<String> = Label::new("0.0s".to_string()),
-                #[widget(handler=slider)] _ = make_widget! {
-                    // TODO: this layout widget is used only to add a label.
-                    // Allow all controls to have labels without this?
-                    #[layout(row)]
-                    #[handler(msg = Duration)]
-                    struct {
-                        #[widget] _ = Label::new("Duration:"),
-                        // TODO: reserve a minimum size around the slider?
-                        #[widget] _ = Slider::new_with_direction(DUR_MIN, DUR_MAX, DUR_STEP, Right)
-                            .with_value(Duration::from_secs(10)),
-                    }
-                },
+                #[widget(handler=slider)] _ =
+                    Slider::new_with_direction(DUR_MIN, DUR_MAX, DUR_STEP, Right)
+                        .with_value(Duration::from_secs(10))
+                        .with_reserve(|sh, axis| {
+                            if axis.is_horizontal() {
+                                SizeRules::fixed(sh.pixels_from_em(6.0).cast_nearest(), (0, 0))
+                            } else {
+                                SizeRules::EMPTY
+                            }
+                        })
+                        .with_label(kas::dir::Left, "Duration:"),
                 #[widget(handler=reset)] _ = TextButton::new_msg("Reset", ()),
                 dur: Duration = Duration::from_secs(10),
                 saved: Duration = Duration::default(),

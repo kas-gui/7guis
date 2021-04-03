@@ -10,7 +10,7 @@ use kas::event::{ChildMsg, VoidResponse};
 use kas::prelude::*;
 use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
 use kas::widget::view::{FilteredList, ListData, SimpleCaseInsensitiveFilter};
-use kas::widget::view::{ListView, SelectionMode};
+use kas::widget::view::{ListView, SelectionMode, driver::DefaultNav};
 use kas::widget::{EditBox, EditField, EditGuard};
 use kas::widget::{Filler, Frame, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
@@ -213,7 +213,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 }
             ),
             #[widget(row=1, col=0, cspan=2, rspan=2, handler=select)] list:
-                Frame<ScrollBars<ListView<Down, Data>>> =
+                Frame<ScrollBars<ListView<Down, Data, DefaultNav>>> =
                 Frame::new(ScrollBars::new(ListView::new(data)
                     .with_selection_mode(SelectionMode::Single))),
             #[widget(row=1, col=3)] editor: impl Editor = editor,
