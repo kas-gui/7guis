@@ -6,9 +6,9 @@
 //! Cells: a mini spreadsheet
 
 use kas::prelude::*;
-use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
-use kas::widget::view::{Driver, MatrixData, MatrixView};
-use kas::widget::{EditBox, EditField, EditGuard, Window};
+use kas::updatable::{MatrixData, RecursivelyUpdatable, Updatable, UpdatableHandler};
+use kas::widgets::view::{Driver, MatrixView};
+use kas::widgets::{EditBox, EditField, EditGuard, Window};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -401,11 +401,10 @@ impl EditGuard for CellGuard {
         Self::focus_lost(edit, mgr)
     }
 
-    fn focus_gained(edit: &mut EditField<Self>, mgr: &mut Manager) -> Option<Self::Msg> {
+    fn focus_gained(edit: &mut EditField<Self>, mgr: &mut Manager) {
         let mut s = String::default();
         std::mem::swap(&mut edit.guard.input, &mut s);
         *mgr |= edit.set_string(s);
-        None
     }
 
     fn focus_lost(edit: &mut EditField<Self>, _: &mut Manager) -> Option<Self::Msg> {

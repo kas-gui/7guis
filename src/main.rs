@@ -13,7 +13,7 @@ mod temp_conv;
 mod timer;
 
 use kas::prelude::*;
-use kas::widget::{MessageBox, TextButton, Window};
+use kas::widgets::{MessageBox, TextButton, Window};
 
 #[derive(Clone, Debug, VoidMsg)]
 enum X {
@@ -26,7 +26,7 @@ enum X {
     Cells,
 }
 
-fn main() -> Result<(), kas_wgpu::Error> {
+fn main() -> Result<(), kas::shell::Error> {
     env_logger::init();
 
     let window = Window::new(
@@ -61,8 +61,8 @@ fn main() -> Result<(), kas_wgpu::Error> {
         },
     );
 
-    let theme = kas_wgpu::theme::ShadedTheme::new();
-    let mut toolkit = kas_wgpu::Toolkit::new(theme)?;
+    let theme = kas::theme::ShadedTheme::new();
+    let mut toolkit = kas::shell::Toolkit::new(theme)?;
     toolkit.add(window)?;
     toolkit.run()
 }
