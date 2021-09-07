@@ -3,11 +3,11 @@ name = "kas-7guis"
 version = "0.1.0"
 authors = ["Diggory Hardy <git@dhardy.name>"]
 edition = "2018"
+resolver = "2"
 publish = false
 
 [dependencies]
-kas = "0.9.1"
-kas-wgpu = "0.9"
+kas = { version = "0.10.0" }
 chrono = "0.4"
 env_logger = "0.8"
 pest = "2.1"

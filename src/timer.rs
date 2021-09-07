@@ -8,7 +8,7 @@
 use kas::dir::Right;
 use kas::event::VoidResponse;
 use kas::prelude::*;
-use kas::widget::{Label, ProgressBar, Slider, TextButton, Window};
+use kas::widgets::{Label, ProgressBar, Slider, TextButton, Window};
 use std::time::{Duration, Instant};
 
 const DUR_MIN: Duration = Duration::from_secs(0);

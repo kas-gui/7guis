@@ -8,7 +8,7 @@
 use kas::event::{Manager, VoidMsg, VoidResponse};
 use kas::macros::make_widget;
 use kas::prelude::*;
-use kas::widget::{Label, TextButton, Window};
+use kas::widgets::{Label, TextButton, Window};
 
 pub fn window() -> Box<dyn kas::Window> {
     Box::new(Window::new(

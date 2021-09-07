@@ -8,11 +8,11 @@
 use kas::dir::Down;
 use kas::event::{ChildMsg, VoidResponse};
 use kas::prelude::*;
+use kas::updatable::{FilteredList, ListData, SimpleCaseInsensitiveFilter};
 use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
-use kas::widget::view::{driver::DefaultNav, ListView, SelectionMode};
-use kas::widget::view::{FilteredList, ListData, SimpleCaseInsensitiveFilter};
-use kas::widget::{EditBox, EditField, EditGuard};
-use kas::widget::{Filler, Frame, Label, ScrollBars, TextButton, Window};
+use kas::widgets::view::{driver::DefaultNav, ListView, SelectionMode};
+use kas::widgets::{EditBox, EditField, EditGuard};
+use kas::widgets::{Filler, Frame, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Debug)]

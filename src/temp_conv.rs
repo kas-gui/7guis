@@ -10,7 +10,7 @@
 use kas::event::{Manager, VoidMsg, VoidResponse};
 use kas::macros::{make_widget, VoidMsg};
 use kas::prelude::*;
-use kas::widget::{EditBox, Label, Window};
+use kas::widgets::{EditBox, Label, Window};
 
 #[derive(Clone, Debug, VoidMsg)]
 enum Message {
