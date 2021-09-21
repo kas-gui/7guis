@@ -36,16 +36,16 @@ fn main() -> Result<(), kas::shell::Error> {
             #[layout(column)]
             #[handler(msg = VoidMsg)]
             struct {
-                #[widget(handler = launch)] _ = TextButton::new_msg("&Counter", X::Counter),
-                #[widget(handler = launch)] _ = TextButton::new_msg("Tem&perature Converter", X::Temp),
-                #[widget(handler = launch)] _ = TextButton::new_msg("&Flight &Booker", X::Flight),
-                #[widget(handler = launch)] _ = TextButton::new_msg("&Timer", X::Timer),
-                #[widget(handler = launch)] _ = TextButton::new_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
-                #[widget(handler = launch)] _ = TextButton::new_msg("Ci&rcle Drawer", X::Circle),
-                #[widget(handler = launch)] _ = TextButton::new_msg("Ce&lls", X::Cells),
+                #[widget(use_msg = launch)] _ = TextButton::new_msg("&Counter", X::Counter),
+                #[widget(use_msg = launch)] _ = TextButton::new_msg("Tem&perature Converter", X::Temp),
+                #[widget(use_msg = launch)] _ = TextButton::new_msg("&Flight &Booker", X::Flight),
+                #[widget(use_msg = launch)] _ = TextButton::new_msg("&Timer", X::Timer),
+                #[widget(use_msg = launch)] _ = TextButton::new_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
+                #[widget(use_msg = launch)] _ = TextButton::new_msg("Ci&rcle Drawer", X::Circle),
+                #[widget(use_msg = launch)] _ = TextButton::new_msg("Ce&lls", X::Cells),
             }
             impl {
-                fn launch(&mut self, mgr: &mut Manager, x: X) -> Response<VoidMsg> {
+                fn launch(&mut self, mgr: &mut Manager, x: X) {
                     mgr.add_window(match x {
                         X::Counter => counter::window(),
                         X::Temp => temp_conv::window(),
@@ -55,7 +55,6 @@ fn main() -> Result<(), kas::shell::Error> {
                         X::Cells => cells::window(),
                         _ => Box::new(MessageBox::new("TODO", "Not implemented yet!")),
                     });
-                    Response::None
                 }
             }
         },

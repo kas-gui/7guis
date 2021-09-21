@@ -26,7 +26,7 @@ pub fn window() -> Box<dyn kas::Window> {
             struct {
                 #[widget] progress: ProgressBar<Right> = ProgressBar::new(),
                 #[widget] elapsed: Label<String> = Label::new("0.0s".to_string()),
-                #[widget(handler=slider)] _ =
+                #[widget(use_msg=slider)] _ =
                     Slider::new_with_direction(DUR_MIN, DUR_MAX, DUR_STEP, Right)
                         .with_value(Duration::from_secs(10))
                         .with_reserve(|sh, axis| {
@@ -37,7 +37,7 @@ pub fn window() -> Box<dyn kas::Window> {
                             }
                         })
                         .with_label(kas::dir::Left, "Duration:"),
-                #[widget(handler=reset)] _ = TextButton::new_msg("Reset", ()),
+                #[widget(use_msg=reset)] _ = TextButton::new_msg("Reset", ()),
                 dur: Duration = Duration::from_secs(10),
                 saved: Duration = Duration::default(),
                 start: Option<Instant> = None,
@@ -78,7 +78,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 }
             }
             impl {
-                fn slider(&mut self, mgr: &mut Manager, dur: Duration) -> VoidResponse {
+                fn slider(&mut self, mgr: &mut Manager, dur: Duration) {
                     self.dur = dur;
                     let mut elapsed = self.saved;
                     if let Some(start) = self.start {
@@ -93,15 +93,13 @@ pub fn window() -> Box<dyn kas::Window> {
                     }
                     let frac = elapsed.as_secs_f32() / self.dur.as_secs_f32();
                     *mgr |= self.progress.set_value(frac);
-                    Response::None
                 }
-                fn reset(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {
+                fn reset(&mut self, mgr: &mut Manager, _: ()) {
                     self.saved = Duration::default();
                     self.start = Some(Instant::now());
                     mgr.update_on_timer(DUR_STEP, self.id(), TIMER_ID);
                     *mgr |= self.progress.set_value(0.0);
                     *mgr |= self.elapsed.set_string("0.0s".to_string());
-                    Response::None
                 }
             }
         },

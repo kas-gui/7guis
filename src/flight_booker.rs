@@ -6,7 +6,6 @@
 //! Flight booker
 
 use chrono::{Duration, Local, NaiveDate};
-use kas::event::VoidResponse;
 use kas::prelude::*;
 use kas::widgets::{ComboBox, EditBox, EditField, EditGuard, MessageBox, TextButton, Window};
 
@@ -66,18 +65,18 @@ pub fn window() -> Box<dyn kas::Window> {
             #[layout(column)]
             #[handler(msg = VoidMsg)]
             struct {
-                #[widget(handler = combo)] _: ComboBox<Flight> = ComboBox::new(&combo_labels, 0)
+                #[widget(use_msg = combo)] _: ComboBox<Flight> = ComboBox::new(&combo_labels, 0)
                     .on_select(move |_, index| Some(combo_values[index])),
-                #[widget(handler = date)] d1: EditBox<Guard> = d1,
-                #[widget(handler = date)] d2: EditBox<Guard> = d2,
-                #[widget(handler = book)] book = TextButton::new_msg("Book", ()),
+                #[widget(use_msg = date)] d1: EditBox<Guard> = d1,
+                #[widget(use_msg = date)] d2: EditBox<Guard> = d2,
+                #[widget(use_msg = book)] book = TextButton::new_msg("Book", ()),
             }
             impl {
-                fn combo(&mut self, mgr: &mut Manager, msg: Flight) -> VoidResponse {
+                fn combo(&mut self, mgr: &mut Manager, msg: Flight) {
                     *mgr |= self.d2.set_disabled(msg == Flight::OneWay);
-                    self.date(mgr, ())
+                    self.date(mgr, ());
                 }
-                fn date(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {
+                fn date(&mut self, mgr: &mut Manager, _: ()) {
                     let is_ready = match self.d1.guard.date {
                         None => false,
                         Some(_) if self.d2.is_disabled() => true,
@@ -95,9 +94,8 @@ pub fn window() -> Box<dyn kas::Window> {
                         }
                     };
                     *mgr |= self.book.set_disabled(!is_ready);
-                    VoidResponse::None
                 }
-                fn book(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {
+                fn book(&mut self, mgr: &mut Manager, _: ()) {
                     let d1 = self.d1.guard.date.unwrap();
                     let msg = if self.d2.is_disabled() {
                         format!("You have booked a one-way flight on {}", d1.format("%Y-%m-%d"))
@@ -110,7 +108,6 @@ pub fn window() -> Box<dyn kas::Window> {
                         )
                     };
                     mgr.add_window(Box::new(MessageBox::new("Booker result", msg)));
-                    VoidResponse::None
                 }
             }
         },

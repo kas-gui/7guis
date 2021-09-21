@@ -5,7 +5,7 @@
 
 //! Counter
 
-use kas::event::{Manager, VoidMsg, VoidResponse};
+use kas::event::{Manager, VoidMsg};
 use kas::macros::make_widget;
 use kas::prelude::*;
 use kas::widgets::{Label, TextButton, Window};
@@ -23,14 +23,13 @@ pub fn window() -> Box<dyn kas::Window> {
                         let mut w = Label::new("0000".to_string());
                         w.size_rules(size_handle, axis_info)
                     }),
-                #[widget(handler = count)] _ = TextButton::new_msg("Count", ()),
+                #[widget(use_msg = count)] _ = TextButton::new_msg("Count", ()),
                 counter: usize = 0,
             }
             impl {
-                fn count(&mut self, mgr: &mut Manager, _msg: ()) -> VoidResponse {
+                fn count(&mut self, mgr: &mut Manager, _msg: ()) {
                     self.counter = self.counter.saturating_add(1);
                     *mgr |= self.display.set_string(self.counter.to_string());
-                    VoidResponse::None
                 }
             }
         },

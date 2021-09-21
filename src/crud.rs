@@ -6,7 +6,7 @@
 //! Create Read Update Delete
 
 use kas::dir::Down;
-use kas::event::{ChildMsg, VoidResponse};
+use kas::event::ChildMsg;
 use kas::prelude::*;
 use kas::updatable::{FilteredList, ListData, SimpleCaseInsensitiveFilter};
 use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
@@ -204,7 +204,7 @@ pub fn window() -> Box<dyn kas::Window> {
         #[handler(msg = VoidMsg)]
         struct {
             #[widget(row=0, col=0)] _ = Label::new("Filter:"),
-            #[widget(row=0, col=1, handler=filter)] filter = EditBox::new("")
+            #[widget(row=0, col=1, use_msg=filter)] filter = EditBox::new("")
                 .on_edit(move |text, mgr| {
                     let filter = SimpleCaseInsensitiveFilter::new(text);
                     let update = data2.set_filter(filter);
@@ -212,19 +212,19 @@ pub fn window() -> Box<dyn kas::Window> {
                     Some(())
                 }
             ),
-            #[widget(row=1, col=0, cspan=2, rspan=2, handler=select)] list:
+            #[widget(row=1, col=0, cspan=2, rspan=2, use_msg=select)] list:
                 Frame<ScrollBars<ListView<Down, Data, DefaultNav>>> =
                 Frame::new(ScrollBars::new(ListView::new(data)
                     .with_selection_mode(SelectionMode::Single))),
             #[widget(row=1, col=3)] editor: impl Editor = editor,
-            #[widget(row=3, cspan=3, handler=controls)] controls: impl Disable = controls,
+            #[widget(row=3, cspan=3, use_msg=controls)] controls: impl Disable = controls,
             data: Data = data3,
         }
         impl {
             fn selected(&self) -> Option<usize> {
                 self.list.selected_iter().next().cloned()
             }
-            fn filter(&mut self, mgr: &mut Manager, _: ()) -> VoidResponse {
+            fn filter(&mut self, mgr: &mut Manager, _: ()) {
                 if let Some(index) = self.selected() {
                     if !self.data.contains_key(&index) {
                         self.list.clear_selected();
@@ -232,9 +232,8 @@ pub fn window() -> Box<dyn kas::Window> {
                             | self.controls.disable_update_delete(true);
                     }
                 }
-                Response::None
             }
-            fn select(&mut self, mgr: &mut Manager, msg: ChildMsg<usize, VoidMsg>) -> VoidResponse {
+            fn select(&mut self, mgr: &mut Manager, msg: ChildMsg<usize, VoidMsg>) {
                 match msg {
                     ChildMsg::Select(key) => {
                         let item = self.data.data.read(key);
@@ -243,9 +242,8 @@ pub fn window() -> Box<dyn kas::Window> {
                     }
                     _ => (),
                 }
-                Response::None
             }
-            fn controls(&mut self, mgr: &mut Manager, control: Control) -> VoidResponse {
+            fn controls(&mut self, mgr: &mut Manager, control: Control)  {
                 match control {
                     Control::Create => {
                         if let Some(item) = self.editor.make_item() {
@@ -276,7 +274,6 @@ pub fn window() -> Box<dyn kas::Window> {
                         }
                     }
                 }
-                Response::None
             }
         }
     };
