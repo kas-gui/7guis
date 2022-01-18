@@ -8,9 +8,9 @@
 use kas::dir::Down;
 use kas::event::ChildMsg;
 use kas::prelude::*;
-use kas::updatable::{FilteredList, ListData, SimpleCaseInsensitiveFilter};
-use kas::updatable::{RecursivelyUpdatable, Updatable, UpdatableHandler};
-use kas::widgets::view::{driver::DefaultNav, ListView, SelectionMode};
+use kas::updatable::filter::ContainsCaseInsensitive;
+use kas::updatable::{ListData, Updatable, UpdatableHandler};
+use kas::widgets::view::{driver, FilterListView, SelectionMode, SingleView};
 use kas::widgets::{EditBox, EditField, EditGuard};
 use kas::widgets::{Filler, Frame, Label, ScrollBars, TextButton, Window};
 use std::{cell::RefCell, rc::Rc};
@@ -56,7 +56,7 @@ impl Entries {
     pub fn read(&self, index: usize) -> Entry {
         self.v.borrow()[index].clone()
     }
-    pub fn update(&self, index: usize, entry: Entry) -> UpdateHandle {
+    pub fn update_entry(&self, index: usize, entry: Entry) -> UpdateHandle {
         self.v.borrow_mut()[index] = entry;
         self.u
     }
@@ -66,14 +66,13 @@ impl Entries {
     }
 }
 
-pub type Data = Rc<FilteredList<Entries, SimpleCaseInsensitiveFilter>>;
+pub type Data = Rc<Entries>;
 
 impl Updatable for Entries {
     fn update_handle(&self) -> Option<UpdateHandle> {
         Some(self.u)
     }
 }
-impl RecursivelyUpdatable for Entries {}
 impl ListData for Entries {
     type Key = usize;
     type Item = String;
@@ -116,8 +115,7 @@ pub fn make_data() -> Data {
         Entry::new("Mustermann", "Max"),
         Entry::new("Tisch", "Roman"),
     ];
-    let filter = SimpleCaseInsensitiveFilter::new("");
-    Rc::new(FilteredList::new(Entries::new(entries), filter))
+    Rc::new(Entries::new(entries))
 }
 
 #[derive(Clone, Debug, VoidMsg)]
@@ -148,8 +146,12 @@ trait Disable {
 
 pub fn window() -> Box<dyn kas::Window> {
     let data = make_data();
-    let data2 = data.clone();
-    let data3 = data.clone();
+    let filter = ContainsCaseInsensitive::new("");
+
+    type FilterField = SingleView<ContainsCaseInsensitive, driver::Widget<EditBox>>;
+    type FilterList = FilterListView<Down, Data, ContainsCaseInsensitive, driver::DefaultNav>;
+    let filter_list = FilterListView::new(data.clone(), filter.clone())
+        .with_selection_mode(SelectionMode::Single);
 
     let mut edit = EditBox::new("").with_guard(NameGuard);
     edit.set_error_state(true);
@@ -204,39 +206,22 @@ pub fn window() -> Box<dyn kas::Window> {
         #[handler(msg = VoidMsg)]
         struct {
             #[widget(row=0, col=0)] _ = Label::new("Filter:"),
-            #[widget(row=0, col=1, use_msg=filter)] filter = EditBox::new("")
-                .on_edit(move |text, mgr| {
-                    let filter = SimpleCaseInsensitiveFilter::new(text);
-                    let update = data2.set_filter(filter);
-                    mgr.trigger_update(update, 0);
-                    Some(())
-                }
-            ),
+            #[widget(row=0, col=1)] filter = FilterField::new(filter),
             #[widget(row=1, col=0, cspan=2, rspan=2, use_msg=select)] list:
-                Frame<ScrollBars<ListView<Down, Data, DefaultNav>>> =
-                Frame::new(ScrollBars::new(ListView::new(data)
-                    .with_selection_mode(SelectionMode::Single))),
+                Frame<ScrollBars<FilterList>> =
+                Frame::new(ScrollBars::new(filter_list)),
             #[widget(row=1, col=3)] editor: impl Editor = editor,
             #[widget(row=3, cspan=3, use_msg=controls)] controls: impl Disable = controls,
-            data: Data = data3,
+            data: Data = data,
         }
         impl {
             fn selected(&self) -> Option<usize> {
                 self.list.selected_iter().next().cloned()
             }
-            fn filter(&mut self, mgr: &mut Manager, _: ()) {
-                if let Some(index) = self.selected() {
-                    if !self.data.contains_key(&index) {
-                        self.list.clear_selected();
-                        *mgr |= self.editor.clear()
-                            | self.controls.disable_update_delete(true);
-                    }
-                }
-            }
             fn select(&mut self, mgr: &mut Manager, msg: ChildMsg<usize, VoidMsg>) {
                 match msg {
                     ChildMsg::Select(key) => {
-                        let item = self.data.data.read(key);
+                        let item = self.data.read(key);
                         *mgr |= self.editor.set_item(item)
                             | self.controls.disable_update_delete(false);
                     }
@@ -247,7 +232,7 @@ pub fn window() -> Box<dyn kas::Window> {
                 match control {
                     Control::Create => {
                         if let Some(item) = self.editor.make_item() {
-                            let (index, update) = self.data.data.create(item);
+                            let (index, update) = self.data.create(item);
                             mgr.trigger_update(update, 0);
                             let _ = self.list.select(index);
                             *mgr |= self.controls.disable_update_delete(false);
@@ -256,18 +241,18 @@ pub fn window() -> Box<dyn kas::Window> {
                     Control::Update => {
                         if let Some(index) = self.selected() {
                             if let Some(item) = self.editor.make_item() {
-                                let update = self.data.data.update(index, item);
+                                let update = self.data.update_entry(index, item);
                                 mgr.trigger_update(update, 0);
                             }
                         }
                     }
                     Control::Delete => {
                         if let Some(index) = self.selected() {
-                            let update = self.data.data.delete(index);
+                            let update = self.data.delete(index);
                             mgr.trigger_update(update, 0);
                             let any_selected = self.list.select(index).is_ok();
                             if any_selected {
-                                let item = self.data.data.read(index);
+                                let item = self.data.read(index);
                                 *mgr |= self.editor.set_item(item);
                             }
                             *mgr |= self.controls.disable_update_delete(!any_selected);

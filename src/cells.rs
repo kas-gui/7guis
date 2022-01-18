@@ -6,7 +6,7 @@
 //! Cells: a mini spreadsheet
 
 use kas::prelude::*;
-use kas::updatable::{MatrixData, RecursivelyUpdatable, Updatable, UpdatableHandler};
+use kas::updatable::{MatrixData, Updatable, UpdatableHandler};
 use kas::widgets::view::{Driver, MatrixView};
 use kas::widgets::{EditBox, EditField, EditGuard, Window};
 use std::cell::RefCell;
@@ -329,7 +329,6 @@ impl Updatable for CellData {
         Some(self.update)
     }
 }
-impl RecursivelyUpdatable for CellData {}
 
 impl MatrixData for CellData {
     type ColKey = ColKey;
@@ -436,23 +435,24 @@ impl Driver<(String, String, bool)> for CellDriver {
             edit.set_string(data.1)
         }
     }
+
+    fn get(&self, _: &Self::Widget) -> Option<(String, String, bool)> {
+        None // unused
+    }
 }
 
 pub fn window() -> Box<dyn kas::Window> {
     let mut data = CellData::new();
     let inner = data.inner.get_mut();
-    inner.cells.insert(make_key("A1"), Cell::new("Some values"));
-    inner.cells.insert(make_key("A2"), Cell::new("3"));
-    inner.cells.insert(make_key("A3"), Cell::new("4"));
-    inner.cells.insert(make_key("A4"), Cell::new("5"));
-    inner.cells.insert(make_key("B1"), Cell::new("Sum"));
-    inner
-        .cells
-        .insert(make_key("B2"), Cell::new("= A2 + A3 + A4"));
-    inner.cells.insert(make_key("C1"), Cell::new("Prod"));
-    inner
-        .cells
-        .insert(make_key("C2"), Cell::new("= A2 * A3 * A4"));
+    let cells = &mut inner.cells;
+    cells.insert(make_key("A1"), Cell::new("Some values"));
+    cells.insert(make_key("A2"), Cell::new("3"));
+    cells.insert(make_key("A3"), Cell::new("4"));
+    cells.insert(make_key("A4"), Cell::new("5"));
+    cells.insert(make_key("B1"), Cell::new("Sum"));
+    cells.insert(make_key("B2"), Cell::new("= A2 + A3 + A4"));
+    cells.insert(make_key("C1"), Cell::new("Prod"));
+    cells.insert(make_key("C2"), Cell::new("= A2 * A3 * A4"));
     inner.update_values();
 
     let view = CellDriver;
