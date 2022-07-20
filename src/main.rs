@@ -9,7 +9,7 @@
 mod counter;
 // mod crud;
 // mod flight_booker;
-// mod temp_conv;
+mod temp_conv;
 // mod timer;
 
 use kas::prelude::*;
@@ -51,7 +51,7 @@ fn main() -> Result<(), kas::shell::Error> {
                 if let Some(x) = mgr.try_pop_msg() {
                     mgr.add_window(match x {
                         X::Counter => counter::window(),
-                        // X::Temp => temp_conv::window(),
+                        X::Temp => temp_conv::window(),
                         // X::Flight => flight_booker::window(),
                         // X::Timer => timer::window(),
                         // X::Crud => crud::window(),

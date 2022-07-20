@@ -7,34 +7,43 @@
 //!
 //! TODO: force single-line labels
 
-use kas::event::{Manager, VoidMsg};
-use kas::macros::{make_widget, VoidMsg};
+use kas::event::EventMgr;
 use kas::prelude::*;
-use kas::widgets::{EditBox, Label, Window};
+use kas::widgets::EditBox;
 
-#[derive(Clone, Debug, VoidMsg)]
+#[derive(Clone, Debug)]
 enum Message {
     FromCelsius(f64),
     FromFahrenheit(f64),
 }
 
-pub fn window() -> Box<dyn kas::Window> {
-    Box::new(Window::new(
-        "Temperature Converter",
-        make_widget! {
-            #[widget]
-            #[layout(row)]
-            #[handler(msg = VoidMsg)]
-            struct {
-                #[widget(use_msg=convert)] celsius: impl HasString = EditBox::new("0")
-                    .on_edit(|text, _| text.parse::<f64>().ok().map(|c| Message::FromCelsius(c))),
-                #[widget] _ = Label::new("Celsius ="),
-                #[widget(use_msg=convert)] fahrenheit: impl HasString = EditBox::new("32")
-                    .on_edit(|text, _| text.parse::<f64>().ok().map(|c| Message::FromFahrenheit(c))),
-                #[widget] _ = Label::new("Fahrenheit"),
-            }
-            impl {
-                fn convert(&mut self, mgr: &mut Manager, msg: Message) {
+pub fn window() -> Box<dyn Window> {
+    Box::new(impl_singleton! {
+        #[derive(Debug)]
+        #[widget {
+            layout = row: [
+                self.celsius,
+                "Celsius =",
+                self.fahrenheit,
+                "Fahrenheit",
+            ];
+        }]
+        struct {
+            core: widget_core!(),
+            #[widget] celsius: impl HasString = EditBox::new("0").on_edit(|text, mgr| {
+                if let Ok(c) = text.parse::<f64>() {
+                    mgr.push_msg(Message::FromCelsius(c));
+                }
+            }),
+            #[widget] fahrenheit: impl HasString = EditBox::new("32").on_edit(|text, mgr| {
+                if let Ok(f) = text.parse::<f64>() {
+                    mgr.push_msg(Message::FromFahrenheit(f));
+                }
+            }),
+        }
+        impl Widget for Self {
+            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
+                if let Some(msg) = mgr.try_pop_msg() {
                     match msg {
                         Message::FromCelsius(c) => {
                             let f = c * (9.0/5.0) + 32.0;
@@ -47,6 +56,11 @@ pub fn window() -> Box<dyn kas::Window> {
                     }
                 }
             }
-        },
-    ))
+        }
+        impl Window for Self {
+            fn title(&self) -> &str {
+                "Temperature Converter"
+            }
+        }
+    })
 }
