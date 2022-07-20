@@ -7,7 +7,7 @@ resolver = "2"
 publish = false
 
 [dependencies]
-kas = { version = "0.10.0" }
+kas = { version = "0.11.0" }
 chrono = "0.4"
 env_logger = "0.8"
 pest = "2.1"
@@ -16,4 +16,4 @@ pest_derive = "2.1"
 [patch.crates-io.kas]
 #path = '../kas'
 git = "https://github.com/kas-gui/kas"
-rev = "986d013171aa92741b03d64696b83d8bd91daaf4"
+rev = "bb5dbe43442d4092d56da0313db9951e134c1fa9"

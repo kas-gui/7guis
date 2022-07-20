@@ -5,17 +5,18 @@
 
 //! 7-GUIs launcher
 
-mod cells;
+// mod cells;
 mod counter;
-mod crud;
-mod flight_booker;
-mod temp_conv;
-mod timer;
+// mod crud;
+// mod flight_booker;
+// mod temp_conv;
+// mod timer;
 
 use kas::prelude::*;
-use kas::widgets::{MessageBox, TextButton, Window};
+use kas::widgets::dialog::MessageBox;
+use kas::widgets::TextButton;
 
-#[derive(Clone, Debug, VoidMsg)]
+#[derive(Clone, Debug)]
 enum X {
     Counter,
     Temp,
@@ -29,36 +30,43 @@ enum X {
 fn main() -> Result<(), kas::shell::Error> {
     env_logger::init();
 
-    let window = Window::new(
-        "7GUIs Launcher",
-        make_widget! {
-            #[widget]
-            #[layout(column)]
-            #[handler(msg = VoidMsg)]
-            struct {
-                #[widget(use_msg = launch)] _ = TextButton::new_msg("&Counter", X::Counter),
-                #[widget(use_msg = launch)] _ = TextButton::new_msg("Tem&perature Converter", X::Temp),
-                #[widget(use_msg = launch)] _ = TextButton::new_msg("&Flight &Booker", X::Flight),
-                #[widget(use_msg = launch)] _ = TextButton::new_msg("&Timer", X::Timer),
-                #[widget(use_msg = launch)] _ = TextButton::new_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
-                #[widget(use_msg = launch)] _ = TextButton::new_msg("Ci&rcle Drawer", X::Circle),
-                #[widget(use_msg = launch)] _ = TextButton::new_msg("Ce&lls", X::Cells),
-            }
-            impl {
-                fn launch(&mut self, mgr: &mut Manager, x: X) {
+    let window = impl_singleton! {
+        #[derive(Debug)]
+        #[widget {
+            layout = column: [
+                TextButton::new_msg("&Counter", X::Counter),
+                TextButton::new_msg("Tem&perature Converter", X::Temp),
+                TextButton::new_msg("&Flight &Booker", X::Flight),
+                TextButton::new_msg("&Timer", X::Timer),
+                TextButton::new_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
+                TextButton::new_msg("Ci&rcle Drawer", X::Circle),
+                TextButton::new_msg("Ce&lls", X::Cells),
+            ];
+        }]
+        struct {
+            core: widget_core!(),
+        }
+        impl Widget for Self {
+            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
+                if let Some(x) = mgr.try_pop_msg() {
                     mgr.add_window(match x {
                         X::Counter => counter::window(),
-                        X::Temp => temp_conv::window(),
-                        X::Flight => flight_booker::window(),
-                        X::Timer => timer::window(),
-                        X::Crud => crud::window(),
-                        X::Cells => cells::window(),
+                        // X::Temp => temp_conv::window(),
+                        // X::Flight => flight_booker::window(),
+                        // X::Timer => timer::window(),
+                        // X::Crud => crud::window(),
+                        // X::Cells => cells::window(),
                         _ => Box::new(MessageBox::new("TODO", "Not implemented yet!")),
                     });
                 }
             }
-        },
-    );
+        }
+        impl Window for Self {
+            fn title(&self) -> &str {
+                "7GUIs Launcher"
+            }
+        }
+    };
 
     let theme = kas::theme::ShadedTheme::new();
     let mut toolkit = kas::shell::Toolkit::new(theme)?;
