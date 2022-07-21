@@ -7,7 +7,7 @@
 
 // mod cells;
 mod counter;
-// mod crud;
+mod crud;
 mod flight_booker;
 mod temp_conv;
 mod timer;
@@ -54,7 +54,7 @@ fn main() -> Result<(), kas::shell::Error> {
                         X::Temp => temp_conv::window(),
                         X::Flight => flight_booker::window(),
                         X::Timer => timer::window(),
-                        // X::Crud => crud::window(),
+                        X::Crud => crud::window(),
                         // X::Cells => cells::window(),
                         _ => Box::new(MessageBox::new("TODO", "Not implemented yet!")),
                     });

@@ -6,13 +6,12 @@
 //! Create Read Update Delete
 
 use kas::dir::Down;
-use kas::event::ChildMsg;
+use kas::model::filter::{ContainsCaseInsensitive, FilteredList};
+use kas::model::{ListData, SharedData};
 use kas::prelude::*;
-use kas::updatable::filter::ContainsCaseInsensitive;
-use kas::updatable::{ListData, Updatable, UpdatableHandler};
-use kas::widgets::view::{driver, FilterListView, SelectionMode, SingleView};
-use kas::widgets::{EditBox, EditField, EditGuard};
-use kas::widgets::{Filler, Frame, Label, ScrollBars, TextButton, Window};
+use kas::view::{driver, ListView, SelectionMode, SelectionMsg};
+use kas::widgets::edit::{EditBox, EditField, EditGuard};
+use kas::widgets::{Frame, ScrollBars, TextButton};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Debug)]
@@ -33,52 +32,57 @@ impl Entry {
 }
 
 #[derive(Debug)]
+struct EntriesInner {
+    ver: u64,
+    vec: Vec<Entry>,
+}
+
+#[derive(Debug)]
 pub struct Entries {
-    v: RefCell<Vec<Entry>>,
-    // TODO: we now have two update handles
-    u: UpdateHandle,
+    inner: RefCell<EntriesInner>,
+    u: UpdateId,
 }
 
 // Implement a simple (lazy) CRUD interface
 impl Entries {
-    pub fn new(v: Vec<Entry>) -> Self {
-        Entries {
-            v: RefCell::new(v),
-            u: UpdateHandle::new(),
-        }
+    pub fn new(vec: Vec<Entry>) -> Self {
+        let ver = 0;
+        let inner = RefCell::new(EntriesInner { ver, vec });
+        let u = UpdateId::new();
+        Entries { inner, u }
     }
-    pub fn create(&self, entry: Entry) -> (usize, UpdateHandle) {
-        let mut v = self.v.borrow_mut();
-        let i = v.len();
-        v.push(entry);
-        (i, self.u)
+    pub fn create(&self, entry: Entry) -> (usize, UpdateId) {
+        let mut inner = self.inner.borrow_mut();
+        let index = inner.vec.len();
+        inner.ver += 1;
+        inner.vec.push(entry);
+        (index, self.u)
     }
     pub fn read(&self, index: usize) -> Entry {
-        self.v.borrow()[index].clone()
+        self.inner.borrow().vec[index].clone()
     }
-    pub fn update_entry(&self, index: usize, entry: Entry) -> UpdateHandle {
-        self.v.borrow_mut()[index] = entry;
+    pub fn update_entry(&self, index: usize, entry: Entry) -> UpdateId {
+        let mut inner = self.inner.borrow_mut();
+        inner.ver += 1;
+        inner.vec[index] = entry;
         self.u
     }
-    pub fn delete(&self, index: usize) -> UpdateHandle {
-        self.v.borrow_mut().remove(index);
+    pub fn delete(&self, index: usize) -> UpdateId {
+        let mut inner = self.inner.borrow_mut();
+        inner.ver += 1;
+        inner.vec.remove(index);
         self.u
     }
 }
 
 pub type Data = Rc<Entries>;
 
-impl Updatable for Entries {
-    fn update_handle(&self) -> Option<UpdateHandle> {
-        Some(self.u)
-    }
-}
-impl ListData for Entries {
+impl SharedData for Entries {
     type Key = usize;
     type Item = String;
 
-    fn len(&self) -> usize {
-        self.v.borrow().len()
+    fn version(&self) -> u64 {
+        self.inner.borrow().ver
     }
 
     fn contains_key(&self, key: &Self::Key) -> bool {
@@ -86,26 +90,28 @@ impl ListData for Entries {
     }
 
     fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
-        self.v.borrow().get(*key).map(|e| e.format())
+        self.inner.borrow().vec.get(*key).map(|e| e.format())
     }
 
-    fn update(&self, _: &Self::Key, _: Self::Item) -> Option<UpdateHandle> {
-        None // we could implement updates but don't need to
+    fn update(&self, _: &mut EventMgr, _: &Self::Key, _: Self::Item) {}
+}
+impl ListData for Entries {
+    fn len(&self) -> usize {
+        self.inner.borrow().vec.len()
     }
 
-    fn iter_vec_from(&self, start: usize, limit: usize) -> Vec<(Self::Key, Self::Item)> {
-        let v = self.v.borrow();
-        v.iter()
-            .map(|e| e.format())
-            .enumerate()
+    fn make_id(&self, parent: &WidgetId, key: &Self::Key) -> WidgetId {
+        parent.make_child(*key)
+    }
+    fn reconstruct_key(&self, parent: &WidgetId, child: &WidgetId) -> Option<Self::Key> {
+        child.next_key_after(parent)
+    }
+
+    fn iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::Key> {
+        (0..self.inner.borrow().vec.len())
             .skip(start)
             .take(limit)
             .collect()
-    }
-}
-impl<K> UpdatableHandler<K, VoidMsg> for Entries {
-    fn handle(&self, _: &K, msg: &VoidMsg) -> Option<UpdateHandle> {
-        match *msg {}
     }
 }
 
@@ -118,7 +124,7 @@ pub fn make_data() -> Data {
     Rc::new(Entries::new(entries))
 }
 
-#[derive(Clone, Debug, VoidMsg)]
+#[derive(Clone, Debug)]
 enum Control {
     Create,
     Update,
@@ -128,140 +134,154 @@ enum Control {
 #[derive(Clone, Debug)]
 struct NameGuard;
 impl EditGuard for NameGuard {
-    type Msg = VoidMsg;
     fn update(edit: &mut EditField<Self>) {
         edit.set_error_state(edit.get_str().len() == 0);
     }
 }
 
-trait Editor {
-    fn make_item(&self) -> Option<Entry>;
-    fn set_item(&mut self, item: Entry) -> TkAction;
-    fn clear(&mut self) -> TkAction;
+impl_scope! {
+    #[derive(Debug)]
+    #[impl_default]
+    #[widget {
+        layout = grid: {
+            0, 0: "First name:";
+            1, 0: self.firstname;
+            0, 1: "Surname:";
+            1, 1: self.surname;
+        };
+    }]
+    struct Editor {
+        core: widget_core!(),
+        #[widget] firstname: EditBox<NameGuard> = EditBox::new("".to_string()).with_guard(NameGuard),
+        #[widget] surname: EditBox<NameGuard> = EditBox::new("".to_string()).with_guard(NameGuard),
+    }
+    impl Self {
+        fn make_item(&self) -> Option<Entry> {
+            let last = self.surname.get_string();
+            if last.len() == 0 {
+                return None;
+            }
+            Some(Entry::new(last, self.firstname.get_string()))
+        }
+        fn set_item(&mut self, item: Entry) -> TkAction {
+            self.firstname.set_string(item.first) | self.surname.set_string(item.last)
+        }
+    }
 }
 
-trait Disable {
-    fn disable_update_delete(&mut self, disable: bool) -> TkAction;
+impl_scope! {
+    #[derive(Debug)]
+    #[impl_default]
+    #[widget {
+        layout = row: [
+            TextButton::new_msg("Create", Control::Create),
+            self.update,
+            self.delete,
+        ];
+    }]
+    struct Controls {
+        core: widget_core!(),
+        #[widget] update: TextButton = TextButton::new_msg("Update", Control::Update),
+        #[widget] delete: TextButton = TextButton::new_msg("Delete", Control::Delete),
+    }
+    impl Self {
+        fn disable_update_delete(&mut self, mgr: &mut EventMgr, disable: bool) {
+            mgr.set_disabled(self.update.id(), disable);
+            mgr.set_disabled(self.delete.id(), disable);
+        }
+    }
+    impl Widget for Self {
+        fn configure(&mut self, mgr: &mut ConfigMgr) {
+            mgr.set_disabled(self.update.id(), true);
+            mgr.set_disabled(self.delete.id(), true);
+        }
+    }
 }
 
-pub fn window() -> Box<dyn kas::Window> {
+pub fn window() -> Box<dyn Window> {
     let data = make_data();
     let filter = ContainsCaseInsensitive::new("");
 
-    type FilterField = SingleView<ContainsCaseInsensitive, driver::Widget<EditBox>>;
-    type FilterList = FilterListView<Down, Data, ContainsCaseInsensitive, driver::DefaultNav>;
-    let filter_list = FilterListView::new(data.clone(), filter.clone())
+    type MyFilteredList = FilteredList<Data, ContainsCaseInsensitive>;
+    type FilterList = ListView<Down, MyFilteredList, driver::NavView>;
+    let list_view = FilterList::new(MyFilteredList::new(data.clone(), filter.clone()))
         .with_selection_mode(SelectionMode::Single);
 
-    let mut edit = EditBox::new("").with_guard(NameGuard);
-    edit.set_error_state(true);
-
-    let editor = make_widget! {
-        #[layout(grid)]
-        #[handler(msg = VoidMsg)]
+    Box::new(impl_singleton! {
+        #[derive(Debug)]
+        #[widget {
+            layout = grid: {
+                0, 0: "Filter:";
+                1, 0: self.filter;
+                0..2, 1..3: self.list;
+                3, 1: self.editor;
+                0..4, 3: self.controls;
+            };
+        }]
         struct {
-            #[widget(row = 0, col = 0)] _ = Label::new("First name:"),
-            #[widget(row = 0, col = 1)] firstname: EditBox<NameGuard> = edit.clone(),
-            #[widget(row = 1, col = 0)] _ = Label::new("Surname:"),
-            #[widget(row = 1, col = 1)] surname: EditBox<NameGuard> = edit,
-            #[widget(row = 2)] _ = Filler::new(),
-        }
-        impl Editor {
-            fn make_item(&self) -> Option<Entry> {
-                let last = self.surname.get_string();
-                if last.len() == 0 {
-                    return None;
-                }
-                Some(Entry::new(last, self.firstname.get_string()))
-            }
-            fn set_item(&mut self, item: Entry) -> TkAction {
-                self.firstname.set_string(item.first) | self.surname.set_string(item.last)
-            }
-            fn clear(&mut self) -> TkAction {
-                self.firstname.set_string("".into()) | self.surname.set_string("".into())
-            }
-        }
-    };
-
-    let controls = make_widget! {
-        #[layout(row)]
-        #[handler(msg = Control)]
-        struct {
-            #[widget] _ = TextButton::new_msg("Create", Control::Create),
-            #[widget] update = TextButton::new_msg("Update", Control::Update)
-                .with_disabled(true),
-            #[widget] delete = TextButton::new_msg("Delete", Control::Delete)
-                .with_disabled(true),
-            #[widget] _ = Filler::new(),
-        }
-        impl Disable {
-            fn disable_update_delete(&mut self, disable: bool) -> TkAction {
-                self.update.set_disabled(disable) | self.delete.set_disabled(disable)
-            }
-        }
-    };
-
-    let crud = make_widget! {
-        #[layout(grid)]
-        #[handler(msg = VoidMsg)]
-        struct {
-            #[widget(row=0, col=0)] _ = Label::new("Filter:"),
-            #[widget(row=0, col=1)] filter = FilterField::new(filter),
-            #[widget(row=1, col=0, cspan=2, rspan=2, use_msg=select)] list:
-                Frame<ScrollBars<FilterList>> =
-                Frame::new(ScrollBars::new(filter_list)),
-            #[widget(row=1, col=3)] editor: impl Editor = editor,
-            #[widget(row=3, cspan=3, use_msg=controls)] controls: impl Disable = controls,
+            core: widget_core!(),
+            #[widget] filter = EditBox::new("")
+                .on_edit(move |s, mgr| filter.update(mgr, &(), s.to_string())),
+            #[widget] list: Frame<ScrollBars<FilterList>> =
+                Frame::new(ScrollBars::new(list_view)),
+            #[widget] editor: Editor = Editor::default(),
+            #[widget] controls: Controls = Controls::default(),
             data: Data = data,
         }
-        impl {
+        impl Self {
             fn selected(&self) -> Option<usize> {
                 self.list.selected_iter().next().cloned()
             }
-            fn select(&mut self, mgr: &mut Manager, msg: ChildMsg<usize, VoidMsg>) {
-                match msg {
-                    ChildMsg::Select(key) => {
-                        let item = self.data.read(key);
-                        *mgr |= self.editor.set_item(item)
-                            | self.controls.disable_update_delete(false);
-                    }
-                    _ => (),
-                }
-            }
-            fn controls(&mut self, mgr: &mut Manager, control: Control)  {
-                match control {
-                    Control::Create => {
-                        if let Some(item) = self.editor.make_item() {
-                            let (index, update) = self.data.create(item);
-                            mgr.trigger_update(update, 0);
-                            let _ = self.list.select(index);
-                            *mgr |= self.controls.disable_update_delete(false);
+        }
+        impl Widget for Self {
+            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
+                if let Some(msg) = mgr.try_pop_msg() {
+                    match msg {
+                        SelectionMsg::Select(key) => {
+                            let item = self.data.read(key);
+                            *mgr |= self.editor.set_item(item);
+                            self.controls.disable_update_delete(mgr, false);
                         }
+                        _ => (),
                     }
-                    Control::Update => {
-                        if let Some(index) = self.selected() {
+                } else if let Some(control) = mgr.try_pop_msg() {
+                    match control {
+                        Control::Create => {
                             if let Some(item) = self.editor.make_item() {
-                                let update = self.data.update_entry(index, item);
-                                mgr.trigger_update(update, 0);
+                                let (index, update) = self.data.create(item);
+                                mgr.update_all(update, 0);
+                                let _ = self.list.select(index);
+                                self.controls.disable_update_delete(mgr, false);
                             }
                         }
-                    }
-                    Control::Delete => {
-                        if let Some(index) = self.selected() {
-                            let update = self.data.delete(index);
-                            mgr.trigger_update(update, 0);
-                            let any_selected = self.list.select(index).is_ok();
-                            if any_selected {
-                                let item = self.data.read(index);
-                                *mgr |= self.editor.set_item(item);
+                        Control::Update => {
+                            if let Some(index) = self.selected() {
+                                if let Some(item) = self.editor.make_item() {
+                                    let update = self.data.update_entry(index, item);
+                                    mgr.update_all(update, 0);
+                                }
                             }
-                            *mgr |= self.controls.disable_update_delete(!any_selected);
+                        }
+                        Control::Delete => {
+                            if let Some(index) = self.selected() {
+                                let update = self.data.delete(index);
+                                mgr.update_all(update, 0);
+                                let any_selected = self.list.select(index).is_ok();
+                                if any_selected {
+                                    let item = self.data.read(index);
+                                    *mgr |= self.editor.set_item(item);
+                                }
+                                self.controls.disable_update_delete(mgr, !any_selected);
+                            }
                         }
                     }
                 }
             }
         }
-    };
-
-    Box::new(Window::new("Create, Read, Update, Delete", crud))
+        impl Window for Self {
+            fn title(&self) -> &str {
+                "Create, Read, Update, Delete"
+            }
+        }
+    })
 }
