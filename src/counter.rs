@@ -8,24 +8,22 @@
 use kas::event::EventMgr;
 use kas::macros::impl_singleton;
 use kas::prelude::*;
-use kas::widgets::{Label, TextButton};
+use kas::widgets::{EditBox, TextButton};
 
 pub fn window() -> Box<dyn Window> {
     Box::new(impl_singleton! {
         #[derive(Debug)]
         #[widget {
             layout = row: [
-                align(center): self.display,
+                align(right): self.display,
                 TextButton::new_msg("Count", ()),
             ];
         }]
         struct {
             core: widget_core!(),
-            #[widget] display: impl HasString =
-                Label::new("0".to_string()).with_reserve(|size_handle, axis_info| {
-                    let mut w = Label::new("0000".to_string());
-                    w.size_rules(size_handle, axis_info)
-                }),
+            #[widget] display: impl HasString = EditBox::new("0".to_string())
+                .with_width_em(3.0, 3.0)
+                .with_editable(false),
             counter: usize = 0,
         }
         impl Widget for Self {

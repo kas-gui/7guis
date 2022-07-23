@@ -30,16 +30,20 @@ pub fn window() -> Box<dyn Window> {
         }]
         struct {
             core: widget_core!(),
-            #[widget] celsius: impl HasString = EditBox::new("0").on_edit(|text, mgr| {
-                if let Ok(c) = text.parse::<f64>() {
-                    mgr.push_msg(Message::FromCelsius(c));
-                }
-            }),
-            #[widget] fahrenheit: impl HasString = EditBox::new("32").on_edit(|text, mgr| {
-                if let Ok(f) = text.parse::<f64>() {
-                    mgr.push_msg(Message::FromFahrenheit(f));
-                }
-            }),
+            #[widget] celsius: impl HasString = EditBox::new("0")
+                .with_width_em(4.0, 4.0)
+                .on_edit(|text, mgr| {
+                    if let Ok(c) = text.parse::<f64>() {
+                        mgr.push_msg(Message::FromCelsius(c));
+                    }
+                }),
+            #[widget] fahrenheit: impl HasString = EditBox::new("32")
+                .with_width_em(4.0, 4.0)
+                .on_edit(|text, mgr| {
+                    if let Ok(f) = text.parse::<f64>() {
+                        mgr.push_msg(Message::FromFahrenheit(f));
+                    }
+                }),
         }
         impl Widget for Self {
             fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
