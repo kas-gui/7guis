@@ -5,34 +5,39 @@
 
 //! Counter
 
-use kas::event::{Manager, VoidMsg, VoidResponse};
-use kas::macros::make_widget;
+use kas::event::EventMgr;
+use kas::macros::impl_singleton;
 use kas::prelude::*;
-use kas::widgets::{Label, TextButton, Window};
+use kas::widgets::{EditBox, TextButton};
 
-pub fn window() -> Box<dyn kas::Window> {
-    Box::new(Window::new(
-        "Counter",
-        make_widget! {
-            #[widget]
-            #[layout(row)]
-            #[handler(msg = VoidMsg)]
-            struct {
-                #[widget(halign = centre)] display: impl HasString =
-                    Label::new("0".to_string()).with_reserve(|size_handle, axis_info| {
-                        let mut w = Label::new("0000".to_string());
-                        w.size_rules(size_handle, axis_info)
-                    }),
-                #[widget(handler = count)] _ = TextButton::new_msg("Count", ()),
-                counter: usize = 0,
-            }
-            impl {
-                fn count(&mut self, mgr: &mut Manager, _msg: ()) -> VoidResponse {
+pub fn window() -> Box<dyn Window> {
+    Box::new(impl_singleton! {
+        #[derive(Debug)]
+        #[widget {
+            layout = row: [
+                align(right): self.display,
+                TextButton::new_msg("Count", ()),
+            ];
+        }]
+        struct {
+            core: widget_core!(),
+            #[widget] display: impl HasString = EditBox::new("0".to_string())
+                .with_width_em(3.0, 3.0)
+                .with_editable(false),
+            counter: usize = 0,
+        }
+        impl Widget for Self {
+            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
+                if let Some(()) = mgr.try_pop_msg() {
                     self.counter = self.counter.saturating_add(1);
                     *mgr |= self.display.set_string(self.counter.to_string());
-                    VoidResponse::None
                 }
             }
-        },
-    ))
+        }
+        impl Window for Self {
+            fn title(&self) -> &str {
+                "Counter"
+            }
+        }
+    })
 }

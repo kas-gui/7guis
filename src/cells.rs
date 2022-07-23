@@ -5,10 +5,10 @@
 
 //! Cells: a mini spreadsheet
 
+use kas::model::{MatrixData, SharedData};
 use kas::prelude::*;
-use kas::updatable::{MatrixData, RecursivelyUpdatable, Updatable, UpdatableHandler};
-use kas::widgets::view::{Driver, MatrixView};
-use kas::widgets::{EditBox, EditField, EditGuard, Window};
+use kas::view::{Driver, MatrixView};
+use kas::widgets::{EditBox, EditField, EditGuard};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -254,6 +254,7 @@ impl Cell {
 
 #[derive(Debug)]
 struct CellDataInner {
+    version: u64,
     cells: HashMap<Key, Cell>,
     values: HashMap<Key, f64>,
 }
@@ -261,6 +262,7 @@ struct CellDataInner {
 impl CellDataInner {
     fn new() -> Self {
         CellDataInner {
+            version: 0,
             cells: HashMap::new(),
             values: HashMap::new(),
         }
@@ -312,42 +314,31 @@ impl CellDataInner {
 #[derive(Debug)]
 struct CellData {
     inner: RefCell<CellDataInner>,
-    update: UpdateHandle,
+    update: UpdateId,
 }
 
 impl CellData {
     fn new() -> Self {
         CellData {
             inner: RefCell::new(CellDataInner::new()),
-            update: UpdateHandle::new(),
+            update: UpdateId::new(),
         }
     }
 }
 
-impl Updatable for CellData {
-    fn update_handle(&self) -> Option<UpdateHandle> {
-        Some(self.update)
-    }
-}
-impl RecursivelyUpdatable for CellData {}
+/// Item is (input_string, display_string, error_state)
+type ItemData = (String, String, bool);
 
-impl MatrixData for CellData {
-    type ColKey = ColKey;
-    type RowKey = u8;
+impl SharedData for CellData {
     type Key = (ColKey, u8);
-    /// Item is (input_string, display_string, error_state)
-    type Item = (String, String, bool);
+    type Item = ItemData;
 
-    fn col_len(&self) -> usize {
-        ColKey::LEN.cast()
+    fn version(&self) -> u64 {
+        self.inner.borrow().version
     }
 
-    fn row_len(&self) -> usize {
-        100
-    }
-
-    fn contains(&self, _: &Self::Key) -> bool {
-        // we know both keys are valid and length is fixed
+    fn contains_key(&self, _: &Self::Key) -> bool {
+        // we know both keys are valid and the length is fixed
         true
     }
 
@@ -360,8 +351,31 @@ impl MatrixData for CellData {
         )
     }
 
-    fn update(&self, _: &Self::Key, _: Self::Item) -> Option<UpdateHandle> {
-        None
+    fn update(&self, _: &mut EventMgr, _: &Self::Key, _: Self::Item) {}
+}
+
+impl MatrixData for CellData {
+    type ColKey = ColKey;
+    type RowKey = u8;
+
+    fn is_empty(&self) -> bool {
+        false
+    }
+    fn len(&self) -> (usize, usize) {
+        (ColKey::LEN.cast(), 100)
+    }
+
+    fn make_id(&self, parent: &WidgetId, key: &Self::Key) -> WidgetId {
+        assert_eq!(std::mem::size_of::<ColKey>(), 1);
+        let key = (((key.0).0 as usize) << 8) | (key.1 as usize);
+        parent.make_child(key)
+    }
+    fn reconstruct_key(&self, parent: &WidgetId, child: &WidgetId) -> Option<Self::Key> {
+        child.next_key_after(parent).map(|key| {
+            let col = ColKey((key >> 8) as u8);
+            let row = key as u8;
+            (col, row)
+        })
     }
 
     fn col_iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::ColKey> {
@@ -379,86 +393,92 @@ impl MatrixData for CellData {
     }
 }
 
-impl UpdatableHandler<(ColKey, u8), String> for CellData {
-    fn handle(&self, key: &(ColKey, u8), msg: &String) -> Option<UpdateHandle> {
-        let cell = Cell::new(msg);
-        let mut inner = self.inner.borrow_mut();
-        inner.cells.insert(key.clone(), cell);
-        // TODO: we should not recompute everything here!
-        inner.update_values();
-        Some(self.update)
-    }
-}
+#[derive(Debug)]
+struct CellActivate;
 
 #[derive(Clone, Default, Debug)]
 struct CellGuard {
     input: String,
 }
 impl EditGuard for CellGuard {
-    type Msg = String;
-
-    fn activate(edit: &mut EditField<Self>, mgr: &mut Manager) -> Option<Self::Msg> {
+    fn activate(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
         Self::focus_lost(edit, mgr)
     }
 
-    fn focus_gained(edit: &mut EditField<Self>, mgr: &mut Manager) {
+    fn focus_gained(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
         let mut s = String::default();
         std::mem::swap(&mut edit.guard.input, &mut s);
         *mgr |= edit.set_string(s);
     }
 
-    fn focus_lost(edit: &mut EditField<Self>, _: &mut Manager) -> Option<Self::Msg> {
-        Some(edit.get_string())
+    fn focus_lost(_: &mut EditField<Self>, mgr: &mut EventMgr) {
+        mgr.push_msg(CellActivate);
     }
 }
 
 #[derive(Debug)]
 struct CellDriver;
 
-impl Driver<(String, String, bool)> for CellDriver {
-    type Msg = String;
+impl Driver<ItemData, CellData> for CellDriver {
     // TODO: we should use EditField instead of EditBox but:
     // (a) there is currently no code to draw separators between cells
     // (b) EditField relies on a parent (EditBox) to draw background highlight on error state
     type Widget = EditBox<CellGuard>;
 
-    fn new(&self) -> Self::Widget {
+    fn make(&self) -> Self::Widget {
         EditBox::new("".to_string()).with_guard(CellGuard::default())
     }
 
-    fn set(&self, edit: &mut Self::Widget, data: (String, String, bool)) -> TkAction {
-        edit.guard.input = data.0;
-        edit.set_error_state(data.2);
-        if edit.has_key_focus() {
-            // assume that the contents of the EditBox are the latest
-            TkAction::empty()
+    fn set(&self, edit: &mut Self::Widget, data: &CellData, key: &(ColKey, u8)) -> TkAction {
+        if let Some(item) = data.get_cloned(key) {
+            edit.guard.input = item.0;
+            edit.set_error_state(item.2);
+            if edit.has_key_focus() {
+                // assume that the contents of the EditBox are the latest
+                TkAction::empty()
+            } else {
+                edit.set_string(item.1)
+            }
         } else {
-            edit.set_string(data.1)
+            TkAction::empty()
+        }
+    }
+
+    fn on_message(
+        &self,
+        mgr: &mut EventMgr,
+        widget: &mut Self::Widget,
+        data: &CellData,
+        key: &(ColKey, u8),
+    ) {
+        if let Some(CellActivate) = mgr.try_pop_msg() {
+            let cell = Cell::new(widget.get_string());
+            let mut inner = data.inner.borrow_mut();
+            inner.cells.insert(key.clone(), cell);
+            // TODO: we should not recompute everything here!
+            inner.update_values();
+
+            inner.version += 1;
+            mgr.update_all(data.update, 0);
         }
     }
 }
 
-pub fn window() -> Box<dyn kas::Window> {
+pub fn window() -> Box<dyn Window> {
     let mut data = CellData::new();
     let inner = data.inner.get_mut();
-    inner.cells.insert(make_key("A1"), Cell::new("Some values"));
-    inner.cells.insert(make_key("A2"), Cell::new("3"));
-    inner.cells.insert(make_key("A3"), Cell::new("4"));
-    inner.cells.insert(make_key("A4"), Cell::new("5"));
-    inner.cells.insert(make_key("B1"), Cell::new("Sum"));
-    inner
-        .cells
-        .insert(make_key("B2"), Cell::new("= A2 + A3 + A4"));
-    inner.cells.insert(make_key("C1"), Cell::new("Prod"));
-    inner
-        .cells
-        .insert(make_key("C2"), Cell::new("= A2 * A3 * A4"));
+    let cells = &mut inner.cells;
+    cells.insert(make_key("A1"), Cell::new("Some values"));
+    cells.insert(make_key("A2"), Cell::new("3"));
+    cells.insert(make_key("A3"), Cell::new("4"));
+    cells.insert(make_key("A4"), Cell::new("5"));
+    cells.insert(make_key("B1"), Cell::new("Sum"));
+    cells.insert(make_key("B2"), Cell::new("= A2 + A3 + A4"));
+    cells.insert(make_key("C1"), Cell::new("Prod"));
+    cells.insert(make_key("C2"), Cell::new("= A2 * A3 * A4"));
     inner.update_values();
 
-    let view = CellDriver;
-    let cells = MatrixView::new_with_driver(view, data)
-        .with_num_visible(5, 20)
-        .map_msg_discard::<VoidMsg>();
+    let cells = MatrixView::new_with_driver(CellDriver, data).with_num_visible(5, 20);
 
-    Box::new(Window::new("Cells", cells))
+    Box::new(kas::widgets::dialog::Window::new("Cells", cells))
 }
