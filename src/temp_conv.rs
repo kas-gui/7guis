@@ -32,14 +32,14 @@ pub fn window() -> Box<dyn Window> {
             core: widget_core!(),
             #[widget] celsius: impl HasString = EditBox::new("0")
                 .with_width_em(4.0, 4.0)
-                .on_edit(|text, mgr| {
+                .on_edit(|mgr, text| {
                     if let Ok(c) = text.parse::<f64>() {
                         mgr.push_msg(Message::FromCelsius(c));
                     }
                 }),
             #[widget] fahrenheit: impl HasString = EditBox::new("32")
                 .with_width_em(4.0, 4.0)
-                .on_edit(|text, mgr| {
+                .on_edit(|mgr, text| {
                     if let Ok(f) = text.parse::<f64>() {
                         mgr.push_msg(Message::FromFahrenheit(f));
                     }

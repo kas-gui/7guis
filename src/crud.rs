@@ -221,7 +221,7 @@ pub fn window() -> Box<dyn Window> {
         struct {
             core: widget_core!(),
             #[widget] filter = EditBox::new("")
-                .on_edit(move |s, mgr| filter.update(mgr, &(), s.to_string())),
+                .on_edit(move |mgr, s| filter.update(mgr, &(), s.to_string())),
             #[widget] list: Frame<ScrollBars<FilterList>> =
                 Frame::new(ScrollBars::new(list_view)),
             #[widget] editor: Editor = Editor::default(),

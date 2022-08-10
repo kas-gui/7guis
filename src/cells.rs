@@ -10,7 +10,7 @@ use kas::prelude::*;
 use kas::view::{Driver, MatrixView};
 use kas::widgets::{EditBox, EditField, EditGuard};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::hash_map::{Entry, HashMap};
 use std::fmt;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
@@ -232,6 +232,14 @@ impl Cell {
         }
     }
 
+    fn update(&mut self, input: &str) {
+        let result = parser::parse(input);
+        self.input.clear();
+        self.input.push_str(input);
+        self.parse_error = result.is_err();
+        self.formula = result.ok().flatten();
+    }
+
     /// Get display string
     fn display(&self) -> String {
         if self.display.len() > 0 {
@@ -345,10 +353,8 @@ impl SharedData for CellData {
     fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
         let inner = self.inner.borrow();
         let cell = inner.cells.get(key);
-        Some(
-            cell.map(|cell| (cell.input.clone(), cell.display().clone(), cell.parse_error))
-                .unwrap_or(("".to_string(), "".to_string(), false)),
-        )
+        cell.map(|cell| (cell.input.clone(), cell.display().clone(), cell.parse_error))
+            .or_else(|| Some(("".to_string(), "".to_string(), false)))
     }
 
     fn update(&self, _: &mut EventMgr, _: &Self::Key, _: Self::Item) {}
@@ -452,9 +458,15 @@ impl Driver<ItemData, CellData> for CellDriver {
         key: &(ColKey, u8),
     ) {
         if let Some(CellActivate) = mgr.try_pop_msg() {
-            let cell = Cell::new(widget.get_string());
             let mut inner = data.inner.borrow_mut();
-            inner.cells.insert(key.clone(), cell);
+            match inner.cells.entry(key.clone()) {
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().update(widget.get_str());
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(Cell::new(widget.get_string()));
+                }
+            }
             // TODO: we should not recompute everything here!
             inner.update_values();
 
