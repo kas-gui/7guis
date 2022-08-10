@@ -16,4 +16,4 @@ pest_derive = "2.1"
 [patch.crates-io.kas]
 #path = '../kas'
 git = "https://github.com/kas-gui/kas"
-rev = "84a814cdbd69610be918b66a1e7633b64350a9f2"
+rev = "6ad21de90768e08f59048eeea86e68db08fb17a8"

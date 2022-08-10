@@ -322,14 +322,12 @@ impl CellDataInner {
 #[derive(Debug)]
 struct CellData {
     inner: RefCell<CellDataInner>,
-    update: UpdateId,
 }
 
 impl CellData {
     fn new() -> Self {
         CellData {
             inner: RefCell::new(CellDataInner::new()),
-            update: UpdateId::new(),
         }
     }
 }
@@ -435,18 +433,14 @@ impl Driver<ItemData, CellData> for CellDriver {
         EditBox::new("".to_string()).with_guard(CellGuard::default())
     }
 
-    fn set(&self, edit: &mut Self::Widget, data: &CellData, key: &(ColKey, u8)) -> TkAction {
-        if let Some(item) = data.get_cloned(key) {
-            edit.guard.input = item.0;
-            edit.set_error_state(item.2);
-            if edit.has_key_focus() {
-                // assume that the contents of the EditBox are the latest
-                TkAction::empty()
-            } else {
-                edit.set_string(item.1)
-            }
-        } else {
+    fn set(&self, edit: &mut Self::Widget, _: &(ColKey, u8), item: ItemData) -> TkAction {
+        edit.guard.input = item.0;
+        edit.set_error_state(item.2);
+        if edit.has_key_focus() {
+            // assume that the contents of the EditBox are the latest
             TkAction::empty()
+        } else {
+            edit.set_string(item.1)
         }
     }
 
@@ -471,7 +465,7 @@ impl Driver<ItemData, CellData> for CellDriver {
             inner.update_values();
 
             inner.version += 1;
-            mgr.update_all(data.update, 0);
+            mgr.update_all(0);
         }
     }
 }

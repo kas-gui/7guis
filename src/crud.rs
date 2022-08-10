@@ -40,7 +40,6 @@ struct EntriesInner {
 #[derive(Debug)]
 pub struct Entries {
     inner: RefCell<EntriesInner>,
-    u: UpdateId,
 }
 
 // Implement a simple (lazy) CRUD interface
@@ -48,30 +47,27 @@ impl Entries {
     pub fn new(vec: Vec<Entry>) -> Self {
         let ver = 0;
         let inner = RefCell::new(EntriesInner { ver, vec });
-        let u = UpdateId::new();
-        Entries { inner, u }
+        Entries { inner }
     }
-    pub fn create(&self, entry: Entry) -> (usize, UpdateId) {
+    pub fn create(&self, entry: Entry) -> usize {
         let mut inner = self.inner.borrow_mut();
         let index = inner.vec.len();
         inner.ver += 1;
         inner.vec.push(entry);
-        (index, self.u)
+        index
     }
     pub fn read(&self, index: usize) -> Entry {
         self.inner.borrow().vec[index].clone()
     }
-    pub fn update_entry(&self, index: usize, entry: Entry) -> UpdateId {
+    pub fn update_entry(&self, index: usize, entry: Entry) {
         let mut inner = self.inner.borrow_mut();
         inner.ver += 1;
         inner.vec[index] = entry;
-        self.u
     }
-    pub fn delete(&self, index: usize) -> UpdateId {
+    pub fn delete(&self, index: usize) {
         let mut inner = self.inner.borrow_mut();
         inner.ver += 1;
         inner.vec.remove(index);
-        self.u
     }
 }
 
@@ -248,8 +244,8 @@ pub fn window() -> Box<dyn Window> {
                     match control {
                         Control::Create => {
                             if let Some(item) = self.editor.make_item() {
-                                let (index, update) = self.data.create(item);
-                                mgr.update_all(update, 0);
+                                let index = self.data.create(item);
+                                mgr.update_all(0);
                                 let _ = self.list.select(index);
                                 self.controls.disable_update_delete(mgr, false);
                             }
@@ -257,15 +253,15 @@ pub fn window() -> Box<dyn Window> {
                         Control::Update => {
                             if let Some(index) = self.selected() {
                                 if let Some(item) = self.editor.make_item() {
-                                    let update = self.data.update_entry(index, item);
-                                    mgr.update_all(update, 0);
+                                    self.data.update_entry(index, item);
+                                    mgr.update_all(0);
                                 }
                             }
                         }
                         Control::Delete => {
                             if let Some(index) = self.selected() {
-                                let update = self.data.delete(index);
-                                mgr.update_all(update, 0);
+                                self.data.delete(index);
+                                mgr.update_all(0);
                                 let any_selected = self.list.select(index).is_ok();
                                 if any_selected {
                                     let item = self.data.read(index);
