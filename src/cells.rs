@@ -8,7 +8,7 @@
 use kas::model::{MatrixData, SharedData};
 use kas::prelude::*;
 use kas::view::{Driver, MatrixView};
-use kas::widgets::{EditBox, EditField, EditGuard};
+use kas::widgets::{EditBox, EditField, EditGuard, ScrollBars};
 use std::cell::RefCell;
 use std::collections::hash_map::{Entry, HashMap};
 use std::fmt;
@@ -368,7 +368,7 @@ impl MatrixData for CellData {
         false
     }
     fn len(&self) -> (usize, usize) {
-        (ColKey::LEN.cast(), 100)
+        (ColKey::LEN.cast(), 99)
     }
 
     fn make_id(&self, parent: &WidgetId, key: &Self::Key) -> WidgetId {
@@ -498,7 +498,8 @@ pub fn window() -> Box<dyn Window> {
         }]
         struct {
             core: widget_core!(),
-            #[widget] cells: MatrixView<CellData, CellDriver> = cells,
+            #[widget] cells: ScrollBars<MatrixView<CellData, CellDriver>> =
+                ScrollBars::new(cells),
         }
         impl Widget for Self {
             fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
