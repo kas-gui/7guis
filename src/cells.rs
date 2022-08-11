@@ -36,6 +36,8 @@ impl fmt::Display for ColKey {
     }
 }
 
+const MAX_ROW: u8 = 99;
+
 pub type Key = (ColKey, u8);
 
 fn make_key(k: &str) -> Key {
@@ -389,7 +391,7 @@ impl MatrixData for CellData {
     fn row_iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::RowKey> {
         // NOTE: for strict compliance with the 7GUIs challenge the rows should
         // start from 0, but any other spreadsheet I've seen starts from 1!
-        (1..=99).skip(start).take(limit).collect()
+        (1..=MAX_ROW).skip(start).take(limit).collect()
     }
 
     fn make_key(col: &Self::ColKey, row: &Self::RowKey) -> Self::Key {
@@ -398,15 +400,18 @@ impl MatrixData for CellData {
 }
 
 #[derive(Debug)]
-struct CellActivate;
+enum CellEvent {
+    Activate,
+    FocusLost,
+}
 
 #[derive(Clone, Default, Debug)]
 struct CellGuard {
     input: String,
 }
 impl EditGuard for CellGuard {
-    fn activate(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
-        Self::focus_lost(edit, mgr)
+    fn activate(_: &mut EditField<Self>, mgr: &mut EventMgr) {
+        mgr.push_msg(CellEvent::Activate);
     }
 
     fn focus_gained(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
@@ -416,7 +421,7 @@ impl EditGuard for CellGuard {
     }
 
     fn focus_lost(_: &mut EditField<Self>, mgr: &mut EventMgr) {
-        mgr.push_msg(CellActivate);
+        mgr.push_msg(CellEvent::FocusLost);
     }
 }
 
@@ -451,7 +456,7 @@ impl Driver<ItemData, CellData> for CellDriver {
         data: &CellData,
         key: &(ColKey, u8),
     ) {
-        if let Some(CellActivate) = mgr.try_pop_msg() {
+        if mgr.try_observe_msg::<CellEvent>().is_some() {
             let mut inner = data.inner.borrow_mut();
             match inner.cells.entry(key.clone()) {
                 Entry::Occupied(mut entry) => {
@@ -461,9 +466,9 @@ impl Driver<ItemData, CellData> for CellDriver {
                     entry.insert(Cell::new(widget.get_string()));
                 }
             }
+
             // TODO: we should not recompute everything here!
             inner.update_values();
-
             inner.version += 1;
             mgr.update_all(0);
         }
@@ -486,5 +491,39 @@ pub fn window() -> Box<dyn Window> {
 
     let cells = MatrixView::new_with_driver(CellDriver, data).with_num_visible(5, 20);
 
-    Box::new(kas::widgets::dialog::Window::new("Cells", cells))
+    Box::new(impl_singleton! {
+        #[derive(Debug)]
+        #[widget {
+            layout = self.cells;
+        }]
+        struct {
+            core: widget_core!(),
+            #[widget] cells: MatrixView<CellData, CellDriver> = cells,
+        }
+        impl Widget for Self {
+            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
+                if let Some(event) = mgr.try_pop_msg() {
+                    match event {
+                        CellEvent::Activate => {
+                            if let Some((col, row)) = mgr.nav_focus().and_then(|id| self.cells.data().reconstruct_key(self.cells.id_ref(), &id)) {
+                                let row = if mgr.modifiers().shift() {
+                                    (row - 1).max(1)
+                                } else {
+                                    (row + 1).min(MAX_ROW)
+                                };
+                                let id = self.cells.data().make_id(self.cells.id_ref(), &(col, row));
+                                mgr.next_nav_focus_from(&mut self.cells, id, true);
+                            }
+                        },
+                        CellEvent::FocusLost => (),
+                    }
+                }
+            }
+        }
+        impl Window for Self {
+            fn title(&self) -> &str {
+                "Cells"
+            }
+        }
+    })
 }
