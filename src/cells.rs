@@ -504,16 +504,19 @@ pub fn window() -> Box<dyn Window> {
                 ScrollBars::new(cells),
         }
         impl Widget for Self {
-            fn handle_unused(&mut self, mgr: &mut EventMgr, _: usize, event: Event) -> Response {
+            fn steal_event(&mut self, mgr: &mut EventMgr, _: &WidgetId, event: &Event) -> Response {
                 match event {
-                    Event::Command(Command::Activate) => {
-                        if let Some((col, row)) = mgr.nav_focus().and_then(|id| self.cells.data().reconstruct_key(self.cells.id_ref(), &id)) {
+                    Event::Command(Command::Enter) => {
+                        if let Some((col, row)) = mgr.nav_focus().and_then(|id| {
+                            self.cells.data().reconstruct_key(self.cells.inner().id_ref(), &id)
+                        })
+                        {
                             let row = if mgr.modifiers().shift() {
                                 (row - 1).max(1)
                             } else {
                                 (row + 1).min(MAX_ROW)
                             };
-                            let id = self.cells.data().make_id(self.cells.id_ref(), &(col, row));
+                            let id = self.cells.data().make_id(self.cells.inner().id_ref(), &(col, row));
                             mgr.next_nav_focus_from(&mut self.cells, id, true);
                         }
                         Response::Used
