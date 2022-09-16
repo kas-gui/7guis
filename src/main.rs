@@ -68,7 +68,7 @@ fn main() -> Result<(), kas::shell::Error> {
         }
     };
 
-    let theme = kas::theme::ShadedTheme::new();
+    let theme = kas::theme::FlatTheme::new();
     let mut toolkit = kas::shell::Toolkit::new(theme)?;
     toolkit.add(window)?;
     toolkit.run()
