@@ -5,12 +5,13 @@
 
 //! Cells: a mini spreadsheet
 
+use kas::event::Command;
 use kas::model::{MatrixData, SharedData};
 use kas::prelude::*;
 use kas::view::{Driver, MatrixView};
-use kas::widgets::{EditBox, EditField, EditGuard};
+use kas::widgets::{EditBox, EditField, EditGuard, ScrollBars};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::hash_map::{Entry, HashMap};
 use std::fmt;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
@@ -35,6 +36,8 @@ impl fmt::Display for ColKey {
         write!(f, "{}", std::str::from_utf8(&b).unwrap())
     }
 }
+
+const MAX_ROW: u8 = 99;
 
 pub type Key = (ColKey, u8);
 
@@ -232,6 +235,14 @@ impl Cell {
         }
     }
 
+    fn update(&mut self, input: &str) {
+        let result = parser::parse(input);
+        self.input.clear();
+        self.input.push_str(input);
+        self.parse_error = result.is_err();
+        self.formula = result.ok().flatten();
+    }
+
     /// Get display string
     fn display(&self) -> String {
         if self.display.len() > 0 {
@@ -314,14 +325,12 @@ impl CellDataInner {
 #[derive(Debug)]
 struct CellData {
     inner: RefCell<CellDataInner>,
-    update: UpdateId,
 }
 
 impl CellData {
     fn new() -> Self {
         CellData {
             inner: RefCell::new(CellDataInner::new()),
-            update: UpdateId::new(),
         }
     }
 }
@@ -345,10 +354,8 @@ impl SharedData for CellData {
     fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
         let inner = self.inner.borrow();
         let cell = inner.cells.get(key);
-        Some(
-            cell.map(|cell| (cell.input.clone(), cell.display().clone(), cell.parse_error))
-                .unwrap_or(("".to_string(), "".to_string(), false)),
-        )
+        cell.map(|cell| (cell.input.clone(), cell.display().clone(), cell.parse_error))
+            .or_else(|| Some(("".to_string(), "".to_string(), false)))
     }
 
     fn update(&self, _: &mut EventMgr, _: &Self::Key, _: Self::Item) {}
@@ -362,7 +369,7 @@ impl MatrixData for CellData {
         false
     }
     fn len(&self) -> (usize, usize) {
-        (ColKey::LEN.cast(), 100)
+        (ColKey::LEN.cast(), 99)
     }
 
     fn make_id(&self, parent: &WidgetId, key: &Self::Key) -> WidgetId {
@@ -385,7 +392,7 @@ impl MatrixData for CellData {
     fn row_iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::RowKey> {
         // NOTE: for strict compliance with the 7GUIs challenge the rows should
         // start from 0, but any other spreadsheet I've seen starts from 1!
-        (1..=99).skip(start).take(limit).collect()
+        (1..=MAX_ROW).skip(start).take(limit).collect()
     }
 
     fn make_key(col: &Self::ColKey, row: &Self::RowKey) -> Self::Key {
@@ -394,15 +401,19 @@ impl MatrixData for CellData {
 }
 
 #[derive(Debug)]
-struct CellActivate;
+enum CellEvent {
+    Activate,
+    FocusLost,
+}
 
 #[derive(Clone, Default, Debug)]
 struct CellGuard {
     input: String,
 }
 impl EditGuard for CellGuard {
-    fn activate(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
-        Self::focus_lost(edit, mgr)
+    fn activate(_: &mut EditField<Self>, mgr: &mut EventMgr) -> Response {
+        mgr.push_msg(CellEvent::Activate);
+        Response::Used
     }
 
     fn focus_gained(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
@@ -412,7 +423,7 @@ impl EditGuard for CellGuard {
     }
 
     fn focus_lost(_: &mut EditField<Self>, mgr: &mut EventMgr) {
-        mgr.push_msg(CellActivate);
+        mgr.push_msg(CellEvent::FocusLost);
     }
 }
 
@@ -429,18 +440,14 @@ impl Driver<ItemData, CellData> for CellDriver {
         EditBox::new("".to_string()).with_guard(CellGuard::default())
     }
 
-    fn set(&self, edit: &mut Self::Widget, data: &CellData, key: &(ColKey, u8)) -> TkAction {
-        if let Some(item) = data.get_cloned(key) {
-            edit.guard.input = item.0;
-            edit.set_error_state(item.2);
-            if edit.has_key_focus() {
-                // assume that the contents of the EditBox are the latest
-                TkAction::empty()
-            } else {
-                edit.set_string(item.1)
-            }
-        } else {
+    fn set(&self, edit: &mut Self::Widget, _: &(ColKey, u8), item: ItemData) -> TkAction {
+        edit.guard.input = item.0;
+        edit.set_error_state(item.2);
+        if edit.has_key_focus() {
+            // assume that the contents of the EditBox are the latest
             TkAction::empty()
+        } else {
+            edit.set_string(item.1)
         }
     }
 
@@ -451,15 +458,21 @@ impl Driver<ItemData, CellData> for CellDriver {
         data: &CellData,
         key: &(ColKey, u8),
     ) {
-        if let Some(CellActivate) = mgr.try_pop_msg() {
-            let cell = Cell::new(widget.get_string());
+        if mgr.try_observe_msg::<CellEvent>().is_some() {
             let mut inner = data.inner.borrow_mut();
-            inner.cells.insert(key.clone(), cell);
+            match inner.cells.entry(key.clone()) {
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().update(widget.get_str());
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(Cell::new(widget.get_string()));
+                }
+            }
+
             // TODO: we should not recompute everything here!
             inner.update_values();
-
             inner.version += 1;
-            mgr.update_all(data.update, 0);
+            mgr.update_all(0);
         }
     }
 }
@@ -480,5 +493,42 @@ pub fn window() -> Box<dyn Window> {
 
     let cells = MatrixView::new_with_driver(CellDriver, data).with_num_visible(5, 20);
 
-    Box::new(kas::widgets::dialog::Window::new("Cells", cells))
+    Box::new(impl_singleton! {
+        #[derive(Debug)]
+        #[widget {
+            layout = self.cells;
+        }]
+        struct {
+            core: widget_core!(),
+            #[widget] cells: ScrollBars<MatrixView<CellData, CellDriver>> =
+                ScrollBars::new(cells),
+        }
+        impl Widget for Self {
+            fn steal_event(&mut self, mgr: &mut EventMgr, _: &WidgetId, event: &Event) -> Response {
+                match event {
+                    Event::Command(Command::Enter) => {
+                        if let Some((col, row)) = mgr.nav_focus().and_then(|id| {
+                            self.cells.data().reconstruct_key(self.cells.inner().id_ref(), &id)
+                        })
+                        {
+                            let row = if mgr.modifiers().shift() {
+                                (row - 1).max(1)
+                            } else {
+                                (row + 1).min(MAX_ROW)
+                            };
+                            let id = self.cells.data().make_id(self.cells.inner().id_ref(), &(col, row));
+                            mgr.next_nav_focus_from(&mut self.cells, id, true);
+                        }
+                        Response::Used
+                    },
+                    _ => Response::Unused
+                }
+            }
+        }
+        impl Window for Self {
+            fn title(&self) -> &str {
+                "Cells"
+            }
+        }
+    })
 }
