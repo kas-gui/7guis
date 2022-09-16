@@ -12,8 +12,3 @@ chrono = "0.4"
 env_logger = "0.8"
 pest = "2.1"
 pest_derive = "2.1"
-
-[patch.crates-io.kas]
-#path = '../kas'
-git = "https://github.com/kas-gui/kas"
-rev = "73509a3c6cd65fc08c8e98ed9014d007c5758ebe"

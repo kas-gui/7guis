@@ -5,6 +5,7 @@
 
 //! Cells: a mini spreadsheet
 
+use kas::event::Command;
 use kas::model::{MatrixData, SharedData};
 use kas::prelude::*;
 use kas::view::{Driver, MatrixView};
@@ -410,8 +411,9 @@ struct CellGuard {
     input: String,
 }
 impl EditGuard for CellGuard {
-    fn activate(_: &mut EditField<Self>, mgr: &mut EventMgr) {
+    fn activate(_: &mut EditField<Self>, mgr: &mut EventMgr) -> Response {
         mgr.push_msg(CellEvent::Activate);
+        Response::Used
     }
 
     fn focus_gained(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
@@ -502,22 +504,21 @@ pub fn window() -> Box<dyn Window> {
                 ScrollBars::new(cells),
         }
         impl Widget for Self {
-            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
-                if let Some(event) = mgr.try_pop_msg() {
-                    match event {
-                        CellEvent::Activate => {
-                            if let Some((col, row)) = mgr.nav_focus().and_then(|id| self.cells.data().reconstruct_key(self.cells.id_ref(), &id)) {
-                                let row = if mgr.modifiers().shift() {
-                                    (row - 1).max(1)
-                                } else {
-                                    (row + 1).min(MAX_ROW)
-                                };
-                                let id = self.cells.data().make_id(self.cells.id_ref(), &(col, row));
-                                mgr.next_nav_focus_from(&mut self.cells, id, true);
-                            }
-                        },
-                        CellEvent::FocusLost => (),
-                    }
+            fn handle_unused(&mut self, mgr: &mut EventMgr, _: usize, event: Event) -> Response {
+                match event {
+                    Event::Command(Command::Activate) => {
+                        if let Some((col, row)) = mgr.nav_focus().and_then(|id| self.cells.data().reconstruct_key(self.cells.id_ref(), &id)) {
+                            let row = if mgr.modifiers().shift() {
+                                (row - 1).max(1)
+                            } else {
+                                (row + 1).min(MAX_ROW)
+                            };
+                            let id = self.cells.data().make_id(self.cells.id_ref(), &(col, row));
+                            mgr.next_nav_focus_from(&mut self.cells, id, true);
+                        }
+                        Response::Used
+                    },
+                    _ => Response::Unused
                 }
             }
         }
