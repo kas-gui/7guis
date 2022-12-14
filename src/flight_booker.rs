@@ -39,7 +39,7 @@ impl EditGuard for Guard {
             Ok(date) => Some(date),
             Err(e) => {
                 // TODO: display error in GUI
-                println!("Error parsing date: {}", e);
+                println!("Error parsing date: {e}");
                 None
             }
         };

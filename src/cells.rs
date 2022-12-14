@@ -20,7 +20,7 @@ type ColKeyIter = iter::Map<ops::RangeInclusive<u8>, fn(u8) -> ColKey>;
 impl ColKey {
     const LEN: u8 = 26;
     fn try_from_u8(n: u8) -> Option<Self> {
-        if n >= b'A' && n <= b'Z' {
+        if (b'A'..=b'Z').contains(&n) {
             Some(ColKey(n))
         } else {
             None
@@ -111,7 +111,7 @@ mod parser {
     #[grammar = "cells.pest"]
     pub struct FormulaParser;
 
-    fn parse_value<'a>(mut pairs: Pairs<'a, Rule>) -> Formula {
+    fn parse_value(mut pairs: Pairs<'_, Rule>) -> Formula {
         let pair = pairs.next().unwrap();
         assert!(pairs.next().is_none());
         match pair.as_rule() {
@@ -133,10 +133,10 @@ mod parser {
         }
     }
 
-    fn parse_product<'a>(mut pairs: Pairs<'a, Rule>) -> Formula {
+    fn parse_product(pairs: Pairs<'_, Rule>) -> Formula {
         let mut product = vec![];
         let mut div = false;
-        while let Some(pair) = pairs.next() {
+        for pair in pairs {
             match pair.as_rule() {
                 Rule::product_op => {
                     if pair.as_span().as_str() == "/" {
@@ -151,9 +151,9 @@ mod parser {
                 _ => unreachable!(),
             }
         }
-        debug_assert!(div == false);
+        debug_assert!(!div);
         if product.len() == 1 {
-            debug_assert!(product[0].1 == false);
+            debug_assert!(!product[0].1);
             product.pop().unwrap().0
         } else {
             debug_assert!(product.len() > 1);
@@ -161,10 +161,10 @@ mod parser {
         }
     }
 
-    fn parse_summation<'a>(mut pairs: Pairs<'a, Rule>) -> Formula {
+    fn parse_summation(pairs: Pairs<'_, Rule>) -> Formula {
         let mut summation = vec![];
         let mut sub = false;
-        while let Some(pair) = pairs.next() {
+        for pair in pairs {
             match pair.as_rule() {
                 Rule::sum_op => {
                     if pair.as_span().as_str() == "-" {
@@ -179,8 +179,8 @@ mod parser {
                 _ => unreachable!(),
             }
         }
-        debug_assert!(sub == false);
-        if summation.len() == 1 && summation[0].1 == false {
+        debug_assert!(!sub);
+        if summation.len() == 1 && !summation[0].1 {
             summation.pop().unwrap().0
         } else {
             debug_assert!(summation.len() > 1);
@@ -188,7 +188,7 @@ mod parser {
         }
     }
 
-    fn parse_expression<'a>(mut pairs: Pairs<'a, Rule>) -> Formula {
+    fn parse_expression(mut pairs: Pairs<'_, Rule>) -> Formula {
         let pair = pairs.next().unwrap();
         assert!(pairs.next().is_none());
         assert_eq!(pair.as_rule(), Rule::expression);
@@ -211,7 +211,7 @@ mod parser {
                 })
             }
             Err(error) => {
-                println!("Error: {}", error);
+                println!("Error: {error}");
                 Err(())
             }
         }
@@ -249,7 +249,7 @@ impl Cell {
 
     /// Get display string
     fn display(&self) -> String {
-        if self.display.len() > 0 {
+        if !self.display.is_empty() {
             self.display.clone()
         } else {
             self.input.clone()
@@ -359,7 +359,7 @@ impl SharedData for CellData {
     fn borrow(&self, key: &Self::Key) -> Option<Self::Item> {
         let inner = self.inner.borrow();
         let cell = inner.cells.get(key);
-        cell.map(|cell| (cell.input.clone(), cell.display().clone(), cell.parse_error))
+        cell.map(|cell| (cell.input.clone(), cell.display(), cell.parse_error))
             .or_else(|| Some(("".to_string(), "".to_string(), false)))
     }
 }
@@ -471,7 +471,7 @@ impl Driver<ItemData, CellData> for CellDriver {
     ) {
         if mgr.try_observe_msg::<CellEvent>().is_some() {
             let mut inner = data.inner.borrow_mut();
-            match inner.cells.entry(key.clone()) {
+            match inner.cells.entry(*key) {
                 Entry::Occupied(mut entry) => {
                     entry.get_mut().update(widget.get_str());
                 }
@@ -519,7 +519,7 @@ pub fn window() -> Box<dyn Window> {
                 match event {
                     Event::Command(Command::Enter) => {
                         if let Some((col, row)) = mgr.nav_focus().and_then(|id| {
-                            self.cells.data().reconstruct_key(self.cells.inner().id_ref(), &id)
+                            self.cells.data().reconstruct_key(self.cells.inner().id_ref(), id)
                         })
                         {
                             let row = if mgr.modifiers().shift() {

@@ -129,7 +129,7 @@ enum Control {
 struct NameGuard;
 impl EditGuard for NameGuard {
     fn update(edit: &mut EditField<Self>) {
-        edit.set_error_state(edit.get_str().len() == 0);
+        edit.set_error_state(edit.get_str().is_empty());
     }
 }
 
@@ -152,7 +152,7 @@ impl_scope! {
     impl Self {
         fn make_item(&self) -> Option<Entry> {
             let last = self.surname.get_string();
-            if last.len() == 0 {
+            if last.is_empty() {
                 return None;
             }
             Some(Entry::new(last, self.firstname.get_string()))
@@ -229,15 +229,10 @@ pub fn window() -> Box<dyn Window> {
         }
         impl Widget for Self {
             fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
-                if let Some(msg) = mgr.try_pop_msg() {
-                    match msg {
-                        SelectionMsg::Select(key) => {
-                            let item = self.data.read(key);
-                            *mgr |= self.editor.set_item(item);
-                            self.controls.disable_update_delete(mgr, false);
-                        }
-                        _ => (),
-                    }
+                if let Some(SelectionMsg::Select(key)) = mgr.try_pop_msg() {
+                    let item = self.data.read(key);
+                    *mgr |= self.editor.set_item(item);
+                    self.controls.disable_update_delete(mgr, false);
                 } else if let Some(control) = mgr.try_pop_msg() {
                     match control {
                         Control::Create => {
