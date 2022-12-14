@@ -58,7 +58,7 @@ pub fn window() -> Box<dyn Window> {
     let d1 = EditBox::new(out.format("%Y-%m-%d").to_string()).with_guard(Guard::new(out));
     let d2 = EditBox::new(back.format("%Y-%m-%d").to_string()).with_guard(Guard::new(back));
 
-    Box::new(impl_singleton! {
+    Box::new(singleton! {
         #[derive(Debug)]
         #[widget {
             layout = column: [

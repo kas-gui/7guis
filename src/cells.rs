@@ -8,14 +8,15 @@
 use kas::event::Command;
 use kas::model::{MatrixData, SharedData};
 use kas::prelude::*;
-use kas::view::{Driver, MatrixView};
+use kas::view::{Driver, MatrixView, MaybeOwned};
 use kas::widgets::{EditBox, EditField, EditGuard, ScrollBars};
 use std::cell::RefCell;
 use std::collections::hash_map::{Entry, HashMap};
-use std::fmt;
+use std::{fmt, iter, ops};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub struct ColKey(u8);
+type ColKeyIter = iter::Map<ops::RangeInclusive<u8>, fn(u8) -> ColKey>;
 impl ColKey {
     const LEN: u8 = 26;
     fn try_from_u8(n: u8) -> Option<Self> {
@@ -25,8 +26,11 @@ impl ColKey {
             None
         }
     }
-    fn iter_keys() -> impl Iterator<Item = Self> {
-        (b'A'..=b'Z').map(|n| ColKey::try_from_u8(n).unwrap())
+    fn from_u8(n: u8) -> Self {
+        Self::try_from_u8(n).expect("bad column key")
+    }
+    fn iter_keys() -> ColKeyIter {
+        (b'A'..=b'Z').map(ColKey::from_u8)
     }
 }
 
@@ -42,7 +46,7 @@ const MAX_ROW: u8 = 99;
 pub type Key = (ColKey, u8);
 
 fn make_key(k: &str) -> Key {
-    let col = ColKey::try_from_u8(k.as_bytes()[0]).unwrap();
+    let col = ColKey::from_u8(k.as_bytes()[0]);
     let row: u8 = k[1..].parse().unwrap();
     (col, row)
 }
@@ -119,7 +123,7 @@ mod parser {
                 if col > b'Z' {
                     col -= b'a' - b'A';
                 }
-                let col = ColKey::try_from_u8(col).unwrap();
+                let col = ColKey::from_u8(col);
                 let row = s[1..].parse().unwrap();
                 let key = (col, row);
                 Formula::Reference(key)
@@ -341,29 +345,30 @@ type ItemData = (String, String, bool);
 impl SharedData for CellData {
     type Key = (ColKey, u8);
     type Item = ItemData;
+    type ItemRef<'b> = Self::Item;
 
     fn version(&self) -> u64 {
         self.inner.borrow().version
     }
 
     fn contains_key(&self, _: &Self::Key) -> bool {
-        // we know both keys are valid and the length is fixed
+        // we know both sub-keys are valid and that the length is fixed
         true
     }
 
-    fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
+    fn borrow(&self, key: &Self::Key) -> Option<Self::Item> {
         let inner = self.inner.borrow();
         let cell = inner.cells.get(key);
         cell.map(|cell| (cell.input.clone(), cell.display().clone(), cell.parse_error))
             .or_else(|| Some(("".to_string(), "".to_string(), false)))
     }
-
-    fn update(&self, _: &mut EventMgr, _: &Self::Key, _: Self::Item) {}
 }
 
 impl MatrixData for CellData {
     type ColKey = ColKey;
     type RowKey = u8;
+    type ColKeyIter<'b> = iter::Take<iter::Skip<ColKeyIter>>;
+    type RowKeyIter<'b> = iter::Take<iter::Skip<ops::RangeInclusive<u8>>>;
 
     fn is_empty(&self) -> bool {
         false
@@ -385,14 +390,14 @@ impl MatrixData for CellData {
         })
     }
 
-    fn col_iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::ColKey> {
-        ColKey::iter_keys().skip(start).take(limit).collect()
+    fn col_iter_from(&self, start: usize, limit: usize) -> Self::ColKeyIter<'_> {
+        ColKey::iter_keys().skip(start).take(limit)
     }
 
-    fn row_iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::RowKey> {
+    fn row_iter_from(&self, start: usize, limit: usize) -> Self::RowKeyIter<'_> {
         // NOTE: for strict compliance with the 7GUIs challenge the rows should
         // start from 0, but any other spreadsheet I've seen starts from 1!
-        (1..=MAX_ROW).skip(start).take(limit).collect()
+        (1..=MAX_ROW).skip(start).take(limit)
     }
 
     fn make_key(col: &Self::ColKey, row: &Self::RowKey) -> Self::Key {
@@ -440,7 +445,13 @@ impl Driver<ItemData, CellData> for CellDriver {
         EditBox::new("".to_string()).with_guard(CellGuard::default())
     }
 
-    fn set(&self, edit: &mut Self::Widget, _: &(ColKey, u8), item: ItemData) -> TkAction {
+    fn set_mo(
+        &self,
+        edit: &mut Self::Widget,
+        _: &(ColKey, u8),
+        item: MaybeOwned<'_, ItemData>,
+    ) -> TkAction {
+        let item = item.into_owned();
         edit.guard.input = item.0;
         edit.set_error_state(item.2);
         if edit.has_key_focus() {
@@ -493,7 +504,7 @@ pub fn window() -> Box<dyn Window> {
 
     let cells = MatrixView::new_with_driver(CellDriver, data).with_num_visible(5, 20);
 
-    Box::new(impl_singleton! {
+    Box::new(singleton! {
         #[derive(Debug)]
         #[widget {
             layout = self.cells;

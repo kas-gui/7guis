@@ -30,7 +30,7 @@ enum X {
 fn main() -> Result<(), kas::shell::Error> {
     env_logger::init();
 
-    let window = impl_singleton! {
+    let window = singleton! {
         #[derive(Debug)]
         #[widget {
             layout = column: [

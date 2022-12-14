@@ -6,12 +6,12 @@
 //! Counter
 
 use kas::event::EventMgr;
-use kas::macros::impl_singleton;
 use kas::prelude::*;
+use kas::singleton;
 use kas::widgets::{EditBox, TextButton};
 
 pub fn window() -> Box<dyn Window> {
-    Box::new(impl_singleton! {
+    Box::new(singleton! {
         #[derive(Debug)]
         #[widget {
             layout = row: [
@@ -21,7 +21,7 @@ pub fn window() -> Box<dyn Window> {
         }]
         struct {
             core: widget_core!(),
-            #[widget] display: impl HasString = EditBox::new("0".to_string())
+            #[widget] display: impl Widget + HasString = EditBox::new("0".to_string())
                 .with_width_em(3.0, 3.0)
                 .with_editable(false),
             counter: usize = 0,
