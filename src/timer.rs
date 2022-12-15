@@ -19,7 +19,7 @@ const TIMER_ID: u64 = 0;
 struct ActionReset;
 
 pub fn window() -> Box<dyn Window> {
-    Box::new(impl_singleton! {
+    Box::new(singleton! {
         #[derive(Debug)]
         #[widget {
             layout = grid: {

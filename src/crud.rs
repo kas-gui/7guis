@@ -7,12 +7,12 @@
 
 use kas::dir::Down;
 use kas::model::filter::{ContainsCaseInsensitive, FilteredList};
-use kas::model::{ListData, SharedData};
+use kas::model::{ListData, SharedData, SharedDataMut};
 use kas::prelude::*;
 use kas::view::{driver, ListView, SelectionMode, SelectionMsg};
 use kas::widgets::edit::{EditBox, EditField, EditGuard};
 use kas::widgets::{Frame, ScrollBars, TextButton};
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, iter, ops, rc::Rc};
 
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -76,6 +76,7 @@ pub type Data = Rc<Entries>;
 impl SharedData for Entries {
     type Key = usize;
     type Item = String;
+    type ItemRef<'b> = Self::Item;
 
     fn version(&self) -> u64 {
         self.inner.borrow().ver
@@ -85,13 +86,13 @@ impl SharedData for Entries {
         *key < self.len()
     }
 
-    fn get_cloned(&self, key: &Self::Key) -> Option<Self::Item> {
+    fn borrow(&self, key: &Self::Key) -> Option<Self::Item> {
         self.inner.borrow().vec.get(*key).map(|e| e.format())
     }
-
-    fn update(&self, _: &mut EventMgr, _: &Self::Key, _: Self::Item) {}
 }
 impl ListData for Entries {
+    type KeyIter<'b> = iter::Take<iter::Skip<ops::Range<usize>>>;
+
     fn len(&self) -> usize {
         self.inner.borrow().vec.len()
     }
@@ -103,11 +104,8 @@ impl ListData for Entries {
         child.next_key_after(parent)
     }
 
-    fn iter_vec_from(&self, start: usize, limit: usize) -> Vec<Self::Key> {
-        (0..self.inner.borrow().vec.len())
-            .skip(start)
-            .take(limit)
-            .collect()
+    fn iter_from(&self, start: usize, limit: usize) -> Self::KeyIter<'_> {
+        (0..self.inner.borrow().vec.len()).skip(start).take(limit)
     }
 }
 
@@ -131,7 +129,7 @@ enum Control {
 struct NameGuard;
 impl EditGuard for NameGuard {
     fn update(edit: &mut EditField<Self>) {
-        edit.set_error_state(edit.get_str().len() == 0);
+        edit.set_error_state(edit.get_str().is_empty());
     }
 }
 
@@ -154,7 +152,7 @@ impl_scope! {
     impl Self {
         fn make_item(&self) -> Option<Entry> {
             let last = self.surname.get_string();
-            if last.len() == 0 {
+            if last.is_empty() {
                 return None;
             }
             Some(Entry::new(last, self.firstname.get_string()))
@@ -203,7 +201,7 @@ pub fn window() -> Box<dyn Window> {
     let list_view = FilterList::new(MyFilteredList::new(data.clone(), filter.clone()))
         .with_selection_mode(SelectionMode::Single);
 
-    Box::new(impl_singleton! {
+    Box::new(singleton! {
         #[derive(Debug)]
         #[widget {
             layout = grid: {
@@ -217,7 +215,7 @@ pub fn window() -> Box<dyn Window> {
         struct {
             core: widget_core!(),
             #[widget] filter = EditBox::new("")
-                .on_edit(move |mgr, s| filter.update(mgr, &(), s.to_string())),
+                .on_edit(move |mgr, s| filter.set(mgr, &(), s.to_string())),
             #[widget] list: Frame<ScrollBars<FilterList>> =
                 Frame::new(ScrollBars::new(list_view)),
             #[widget] editor: Editor = Editor::default(),
@@ -231,15 +229,10 @@ pub fn window() -> Box<dyn Window> {
         }
         impl Widget for Self {
             fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
-                if let Some(msg) = mgr.try_pop_msg() {
-                    match msg {
-                        SelectionMsg::Select(key) => {
-                            let item = self.data.read(key);
-                            *mgr |= self.editor.set_item(item);
-                            self.controls.disable_update_delete(mgr, false);
-                        }
-                        _ => (),
-                    }
+                if let Some(SelectionMsg::Select(key)) = mgr.try_pop_msg() {
+                    let item = self.data.read(key);
+                    *mgr |= self.editor.set_item(item);
+                    self.controls.disable_update_delete(mgr, false);
                 } else if let Some(control) = mgr.try_pop_msg() {
                     match control {
                         Control::Create => {

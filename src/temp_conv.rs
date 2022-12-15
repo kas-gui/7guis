@@ -18,7 +18,7 @@ enum Message {
 }
 
 pub fn window() -> Box<dyn Window> {
-    Box::new(impl_singleton! {
+    Box::new(singleton! {
         #[derive(Debug)]
         #[widget {
             layout = row: [
@@ -30,14 +30,14 @@ pub fn window() -> Box<dyn Window> {
         }]
         struct {
             core: widget_core!(),
-            #[widget] celsius: impl HasString = EditBox::new("0")
+            #[widget] celsius: impl Widget + HasString = EditBox::new("0")
                 .with_width_em(4.0, 4.0)
                 .on_edit(|mgr, text| {
                     if let Ok(c) = text.parse::<f64>() {
                         mgr.push_msg(Message::FromCelsius(c));
                     }
                 }),
-            #[widget] fahrenheit: impl HasString = EditBox::new("32")
+            #[widget] fahrenheit: impl Widget + HasString = EditBox::new("32")
                 .with_width_em(4.0, 4.0)
                 .on_edit(|mgr, text| {
                     if let Ok(f) = text.parse::<f64>() {
