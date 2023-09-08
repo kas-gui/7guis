@@ -5,39 +5,20 @@
 
 //! Counter
 
-use kas::event::EventMgr;
 use kas::prelude::*;
-use kas::singleton;
-use kas::widgets::{EditBox, TextButton};
+use kas::widgets::{Adapt, Button, EditBox};
 
-pub fn window() -> Box<dyn Window> {
-    Box::new(singleton! {
-        #[derive(Debug)]
-        #[widget {
-            layout = row: [
-                align(right): self.display,
-                TextButton::new_msg("Count", ()),
-            ];
-        }]
-        struct {
-            core: widget_core!(),
-            #[widget] display: impl Widget + HasString = EditBox::new("0".to_string())
-                .with_width_em(3.0, 3.0)
-                .with_editable(false),
-            counter: usize = 0,
-        }
-        impl Widget for Self {
-            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
-                if let Some(()) = mgr.try_pop_msg() {
-                    self.counter = self.counter.saturating_add(1);
-                    *mgr |= self.display.set_string(self.counter.to_string());
-                }
-            }
-        }
-        impl Window for Self {
-            fn title(&self) -> &str {
-                "Counter"
-            }
-        }
-    })
+#[derive(Clone, Debug)]
+struct Incr;
+
+pub fn window() -> Window<()> {
+    let ui = kas::row![
+        align!(
+            right,
+            EditBox::string(|count| format!("{count}")).with_width_em(3.0, 3.0)
+        ),
+        Button::label_msg("Count", Incr).map_any(),
+    ];
+    let ui = Adapt::new(ui, 0).on_message(|_, count, Incr| *count += 1);
+    Window::new(ui, "Counter")
 }
