@@ -154,9 +154,11 @@ mod parser {
         for pair in pairs {
             match pair.as_rule() {
                 Rule::product_op => {
-                    if pair.as_span().as_str() == "/" {
-                        div = true;
-                    }
+                    div = match pair.as_span().as_str() {
+                        "*" => false,
+                        "/" => true,
+                        other => panic!("expected `*` or `/`, found `{other}`"),
+                    };
                 }
                 Rule::value => {
                     let formula = parse_value(pair.into_inner());
@@ -182,9 +184,11 @@ mod parser {
         for pair in pairs {
             match pair.as_rule() {
                 Rule::sum_op => {
-                    if pair.as_span().as_str() == "-" {
-                        sub = true;
-                    }
+                    sub = match pair.as_span().as_str() {
+                        "+" => false,
+                        "-" => true,
+                        other => panic!("expected `+` or `-`, found `{other}`"),
+                    };
                 }
                 Rule::product => {
                     let formula = parse_product(pair.into_inner());
@@ -205,7 +209,11 @@ mod parser {
 
     fn parse_expression(mut pairs: Pairs<'_, Rule>) -> Formula {
         let pair = pairs.next().unwrap();
-        assert!(pairs.next().is_none());
+        if let Some(pair) = pairs.next() {
+            if pair.as_rule() != Rule::EOI {
+                panic!("unexpected next pair: {pair:?}");
+            }
+        }
         assert_eq!(pair.as_rule(), Rule::expression);
         let mut pairs = pair.into_inner();
 
