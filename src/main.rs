@@ -5,7 +5,7 @@
 
 //! 7-GUIs launcher
 
-// mod cells;
+mod cells;
 mod counter;
 mod crud;
 mod flight_booker;
@@ -56,7 +56,7 @@ fn main() -> Result<(), kas::shell::Error> {
                         X::Flight => flight_booker::window(),
                         X::Timer => timer::window(),
                         X::Crud => crud::window(),
-                        // X::Cells => cells::window(),
+                        X::Cells => cells::window(),
                         _ => MessageBox::new("Not implemented yet!").into_window("TODO"),
                     });
                 }
