@@ -66,7 +66,7 @@ fn main() -> Result<(), kas::shell::Error> {
     let window = Window::new(ui, "7GUIs Launcher");
 
     let theme = kas::theme::FlatTheme::new();
-    let mut shell = kas::shell::DefaultShell::new((), theme)?;
+    let mut shell = kas::shell::Default::with_theme(theme).build(())?;
     shell.add(window);
     shell.run()
 }
