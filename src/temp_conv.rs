@@ -4,12 +4,9 @@
 //     https://www.apache.org/licenses/LICENSE-2.0
 
 //! Temperature converter
-//!
-//! TODO: force single-line labels
 
-use kas::event::EventMgr;
 use kas::prelude::*;
-use kas::widgets::EditBox;
+use kas::widgets::{Adapt, EditBox};
 
 #[derive(Clone, Debug)]
 enum Message {
@@ -17,54 +14,40 @@ enum Message {
     FromFahrenheit(f64),
 }
 
-pub fn window() -> Box<dyn Window> {
-    Box::new(singleton! {
-        #[derive(Debug)]
-        #[widget {
-            layout = row: [
-                self.celsius,
-                "Celsius =",
-                self.fahrenheit,
-                "Fahrenheit",
-            ];
-        }]
-        struct {
-            core: widget_core!(),
-            #[widget] celsius: impl Widget + HasString = EditBox::new("0")
-                .with_width_em(4.0, 4.0)
-                .on_edit(|mgr, text| {
-                    if let Ok(c) = text.parse::<f64>() {
-                        mgr.push_msg(Message::FromCelsius(c));
-                    }
-                }),
-            #[widget] fahrenheit: impl Widget + HasString = EditBox::new("32")
-                .with_width_em(4.0, 4.0)
-                .on_edit(|mgr, text| {
-                    if let Ok(f) = text.parse::<f64>() {
-                        mgr.push_msg(Message::FromFahrenheit(f));
-                    }
-                }),
-        }
-        impl Widget for Self {
-            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
-                if let Some(msg) = mgr.try_pop_msg() {
-                    match msg {
-                        Message::FromCelsius(c) => {
-                            let f = c * (9.0/5.0) + 32.0;
-                            *mgr |= self.fahrenheit.set_string(f.to_string());
-                        }
-                        Message::FromFahrenheit(f) => {
-                            let c = (f - 32.0) * (5.0 / 9.0);
-                            *mgr |= self.celsius.set_string(c.to_string());
-                        }
-                    }
+impl_scope! {
+    #[impl_default]
+    #[derive(Debug)]
+    struct Temperature {
+        celsius: f64 = 0.0,
+        fahrenheit: f64 = 32.0,
+    }
+
+    impl Self {
+        fn handle(&mut self, msg: Message) {
+            match msg {
+                Message::FromCelsius(c) => {
+                    self.celsius = c;
+                    self.fahrenheit = c * (9.0/5.0) + 32.0;
+                }
+                Message::FromFahrenheit(f) => {
+                    self.celsius = (f - 32.0) * (5.0 / 9.0);
+                    self.fahrenheit = f;
                 }
             }
         }
-        impl Window for Self {
-            fn title(&self) -> &str {
-                "Temperature Converter"
-            }
-        }
-    })
+    }
+}
+
+pub fn window() -> Window<()> {
+    let ui = kas::row![
+        EditBox::parser(|temp: &Temperature| temp.celsius, Message::FromCelsius),
+        "Celsius =",
+        EditBox::parser(
+            |temp: &Temperature| temp.fahrenheit,
+            Message::FromFahrenheit
+        ),
+        "Fahrenheit",
+    ];
+    let ui = Adapt::new(ui, Temperature::default()).on_message(|_, temp, msg| temp.handle(msg));
+    Window::new(ui, "Temperature Converter")
 }

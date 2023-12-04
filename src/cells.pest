@@ -1,8 +1,10 @@
 WHITESPACE = _{ " " | "\t" }
 number = @{
-    ("." ~ ASCII_DIGIT+)
-    | (ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)?)
-    ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+    ("-" | "+")? ~ (
+        ("." ~ ASCII_DIGIT+)
+        |
+        (ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)?) ~ (^"e" ~ ("+" | "-")? ~ ASCII_DIGIT+)?
+    )
 }
 reference = @{ ASCII_ALPHA ~ ASCII_DIGIT+ }
 value = { number | reference | ("(" ~ expression ~ ")") }
@@ -11,6 +13,6 @@ product = { value ~ (product_op ~ value)* }
 sum_op = { "-" | "+" }
 summation = { sum_op? ~ product ~ (sum_op ~ product)* }
 expression = !{ summation }
-formula = ${ SOI ~ "=" ~ WHITESPACE* ~ expression ~ WHITESPACE* }
+formula = ${ SOI ~ "=" ~ WHITESPACE* ~ expression ~ WHITESPACE* ~ EOI }
 text = @{ !"=" ~ ANY* }
 cell = _{ formula | text }

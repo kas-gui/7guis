@@ -5,16 +5,14 @@
 
 //! Cells: a mini spreadsheet
 
-use kas::event::Command;
-use kas::model::{MatrixData, SharedData};
+use kas::event::{Command, FocusSource};
 use kas::prelude::*;
-use kas::view::{Driver, MatrixView, MaybeOwned};
+use kas::view::{DataKey, Driver, MatrixData, MatrixView, SharedData};
 use kas::widgets::{EditBox, EditField, EditGuard, ScrollBars};
-use std::cell::RefCell;
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::HashMap;
 use std::{fmt, iter, ops};
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Hash)]
 pub struct ColKey(u8);
 type ColKeyIter = iter::Map<ops::RangeInclusive<u8>, fn(u8) -> ColKey>;
 impl ColKey {
@@ -43,12 +41,28 @@ impl fmt::Display for ColKey {
 
 const MAX_ROW: u8 = 99;
 
-pub type Key = (ColKey, u8);
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Key(ColKey, u8);
+impl DataKey for Key {
+    fn make_id(&self, parent: &Id) -> Id {
+        assert_eq!(std::mem::size_of::<ColKey>(), 1);
+        let key = (((self.0).0 as usize) << 8) | (self.1 as usize);
+        parent.make_child(key)
+    }
+
+    fn reconstruct_key(parent: &Id, child: &Id) -> Option<Self> {
+        child.next_key_after(parent).map(|key| {
+            let col = ColKey((key >> 8) as u8);
+            let row = key as u8;
+            Key(col, row)
+        })
+    }
+}
 
 fn make_key(k: &str) -> Key {
     let col = ColKey::from_u8(k.as_bytes()[0]);
     let row: u8 = k[1..].parse().unwrap();
-    (col, row)
+    Key(col, row)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -102,7 +116,8 @@ impl Formula {
 }
 
 mod parser {
-    use super::{ColKey, Formula};
+    use super::{ColKey, Formula, Key};
+    use pest::error::Error;
     use pest::iterators::Pairs;
     use pest::Parser;
     use pest_derive::Parser;
@@ -125,7 +140,7 @@ mod parser {
                 }
                 let col = ColKey::from_u8(col);
                 let row = s[1..].parse().unwrap();
-                let key = (col, row);
+                let key = Key(col, row);
                 Formula::Reference(key)
             }
             Rule::expression => parse_expression(pair.into_inner()),
@@ -139,9 +154,11 @@ mod parser {
         for pair in pairs {
             match pair.as_rule() {
                 Rule::product_op => {
-                    if pair.as_span().as_str() == "/" {
-                        div = true;
-                    }
+                    div = match pair.as_span().as_str() {
+                        "*" => false,
+                        "/" => true,
+                        other => panic!("expected `*` or `/`, found `{other}`"),
+                    };
                 }
                 Rule::value => {
                     let formula = parse_value(pair.into_inner());
@@ -167,9 +184,11 @@ mod parser {
         for pair in pairs {
             match pair.as_rule() {
                 Rule::sum_op => {
-                    if pair.as_span().as_str() == "-" {
-                        sub = true;
-                    }
+                    sub = match pair.as_span().as_str() {
+                        "+" => false,
+                        "-" => true,
+                        other => panic!("expected `+` or `-`, found `{other}`"),
+                    };
                 }
                 Rule::product => {
                     let formula = parse_product(pair.into_inner());
@@ -190,7 +209,11 @@ mod parser {
 
     fn parse_expression(mut pairs: Pairs<'_, Rule>) -> Formula {
         let pair = pairs.next().unwrap();
-        assert!(pairs.next().is_none());
+        if let Some(pair) = pairs.next() {
+            if pair.as_rule() != Rule::EOI {
+                panic!("unexpected next pair: {pair:?}");
+            }
+        }
         assert_eq!(pair.as_rule(), Rule::expression);
         let mut pairs = pair.into_inner();
 
@@ -200,21 +223,15 @@ mod parser {
         parse_summation(pair.into_inner())
     }
 
-    pub fn parse(source: &str) -> Result<Option<Formula>, ()> {
-        match FormulaParser::parse(Rule::cell, source) {
-            Ok(mut pairs) => {
-                let pair = pairs.next().unwrap();
-                Ok(match pair.as_rule() {
-                    Rule::formula => Some(parse_expression(pair.into_inner())),
-                    Rule::text => None,
-                    _ => unreachable!(),
-                })
+    pub fn parse(source: &str) -> Result<Option<Formula>, Error<Rule>> {
+        FormulaParser::parse(Rule::cell, source).map(|mut pairs| {
+            let pair = pairs.next().unwrap();
+            match pair.as_rule() {
+                Rule::formula => Some(parse_expression(pair.into_inner())),
+                Rule::text => None,
+                _ => unreachable!(),
             }
-            Err(error) => {
-                println!("Error: {error}");
-                Err(())
-            }
-        }
+        })
     }
 }
 
@@ -228,23 +245,24 @@ struct Cell {
 
 impl Cell {
     fn new<T: ToString>(input: T) -> Self {
-        let input = input.to_string();
-        let result = parser::parse(&input);
-        let parse_error = result.is_err();
-        Cell {
-            input,
-            formula: result.ok().flatten(),
-            parse_error,
-            display: String::new(),
-        }
+        let mut cell = Cell::default();
+        cell.update(input.to_string());
+        cell
     }
 
-    fn update(&mut self, input: &str) {
-        let result = parser::parse(input);
-        self.input.clear();
-        self.input.push_str(input);
-        self.parse_error = result.is_err();
-        self.formula = result.ok().flatten();
+    fn update(&mut self, input: String) {
+        match parser::parse(&input) {
+            Ok(opt_formula) => {
+                self.formula = opt_formula;
+                self.parse_error = false;
+            }
+            Err(error) => {
+                println!("Parse error: {error}");
+                self.display = "BAD FORMULA".to_string();
+                self.parse_error = true;
+            }
+        }
+        self.input = input;
     }
 
     /// Get display string
@@ -257,7 +275,10 @@ impl Cell {
     }
 
     fn try_eval(&mut self, values: &HashMap<Key, f64>) -> Result<Option<f64>, EvalError> {
-        if let Some(ref f) = self.formula {
+        if self.parse_error {
+            // Display the error locally; propegate NaN
+            Ok(Some(f64::NAN))
+        } else if let Some(ref f) = self.formula {
             let value = f.eval(values)?;
             self.display = value.to_string();
             Ok(Some(value))
@@ -268,16 +289,14 @@ impl Cell {
 }
 
 #[derive(Debug)]
-struct CellDataInner {
-    version: u64,
+struct CellData {
     cells: HashMap<Key, Cell>,
     values: HashMap<Key, f64>,
 }
 
-impl CellDataInner {
+impl CellData {
     fn new() -> Self {
-        CellDataInner {
-            version: 0,
+        CellData {
             cells: HashMap::new(),
             values: HashMap::new(),
         }
@@ -326,30 +345,17 @@ impl CellDataInner {
     }
 }
 
-#[derive(Debug)]
-struct CellData {
-    inner: RefCell<CellDataInner>,
+#[derive(Clone, Debug, Default)]
+struct Item {
+    input: String,
+    display: String,
+    error: bool,
 }
-
-impl CellData {
-    fn new() -> Self {
-        CellData {
-            inner: RefCell::new(CellDataInner::new()),
-        }
-    }
-}
-
-/// Item is (input_string, display_string, error_state)
-type ItemData = (String, String, bool);
 
 impl SharedData for CellData {
-    type Key = (ColKey, u8);
-    type Item = ItemData;
+    type Key = Key;
+    type Item = Item;
     type ItemRef<'b> = Self::Item;
-
-    fn version(&self) -> u64 {
-        self.inner.borrow().version
-    }
 
     fn contains_key(&self, _: &Self::Key) -> bool {
         // we know both sub-keys are valid and that the length is fixed
@@ -357,10 +363,14 @@ impl SharedData for CellData {
     }
 
     fn borrow(&self, key: &Self::Key) -> Option<Self::Item> {
-        let inner = self.inner.borrow();
-        let cell = inner.cells.get(key);
-        cell.map(|cell| (cell.input.clone(), cell.display(), cell.parse_error))
-            .or_else(|| Some(("".to_string(), "".to_string(), false)))
+        self.cells
+            .get(key)
+            .map(|cell| Item {
+                input: cell.input.clone(),
+                display: cell.display(),
+                error: cell.parse_error,
+            })
+            .or_else(|| Some(Item::default()))
     }
 }
 
@@ -377,19 +387,6 @@ impl MatrixData for CellData {
         (ColKey::LEN.cast(), 99)
     }
 
-    fn make_id(&self, parent: &WidgetId, key: &Self::Key) -> WidgetId {
-        assert_eq!(std::mem::size_of::<ColKey>(), 1);
-        let key = (((key.0).0 as usize) << 8) | (key.1 as usize);
-        parent.make_child(key)
-    }
-    fn reconstruct_key(&self, parent: &WidgetId, child: &WidgetId) -> Option<Self::Key> {
-        child.next_key_after(parent).map(|key| {
-            let col = ColKey((key >> 8) as u8);
-            let row = key as u8;
-            (col, row)
-        })
-    }
-
     fn col_iter_from(&self, start: usize, limit: usize) -> Self::ColKeyIter<'_> {
         ColKey::iter_keys().skip(start).take(limit)
     }
@@ -400,98 +397,69 @@ impl MatrixData for CellData {
         (1..=MAX_ROW).skip(start).take(limit)
     }
 
-    fn make_key(col: &Self::ColKey, row: &Self::RowKey) -> Self::Key {
-        (*col, *row)
+    fn make_key(&self, col: &Self::ColKey, row: &Self::RowKey) -> Self::Key {
+        Key(*col, *row)
     }
 }
 
 #[derive(Debug)]
-enum CellEvent {
-    Activate,
-    FocusLost,
-}
+struct UpdateInput(Key, String);
 
 #[derive(Clone, Default, Debug)]
 struct CellGuard {
-    input: String,
+    key: Key,
+    is_input: bool,
 }
 impl EditGuard for CellGuard {
-    fn activate(_: &mut EditField<Self>, mgr: &mut EventMgr) -> Response {
-        mgr.push_msg(CellEvent::Activate);
-        Response::Used
+    type Data = Item;
+
+    fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, item: &Item) {
+        let mut action = edit.set_error_state(item.error);
+        if !edit.has_edit_focus() {
+            action |= edit.set_str(&item.display);
+            edit.guard.is_input = false;
+        }
+        cx.action(edit, action);
     }
 
-    fn focus_gained(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
-        let mut s = String::default();
-        std::mem::swap(&mut edit.guard.input, &mut s);
-        *mgr |= edit.set_string(s);
+    fn activate(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Item) -> IsUsed {
+        Self::focus_lost(edit, cx, item);
+        IsUsed::Used
     }
 
-    fn focus_lost(_: &mut EditField<Self>, mgr: &mut EventMgr) {
-        mgr.push_msg(CellEvent::FocusLost);
+    fn focus_gained(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Item) {
+        cx.action(edit.id(), edit.set_str(&item.input));
+        edit.guard.is_input = true;
+    }
+
+    fn focus_lost(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Item) {
+        let s = edit.get_string();
+        if edit.guard.is_input && s != item.input {
+            cx.push(UpdateInput(edit.guard.key, s));
+        }
     }
 }
 
 #[derive(Debug)]
 struct CellDriver;
 
-impl Driver<ItemData, CellData> for CellDriver {
+impl Driver<Item, CellData> for CellDriver {
     // TODO: we should use EditField instead of EditBox but:
     // (a) there is currently no code to draw separators between cells
     // (b) EditField relies on a parent (EditBox) to draw background highlight on error state
     type Widget = EditBox<CellGuard>;
 
-    fn make(&self) -> Self::Widget {
-        EditBox::new("".to_string()).with_guard(CellGuard::default())
-    }
-
-    fn set_mo(
-        &self,
-        edit: &mut Self::Widget,
-        _: &(ColKey, u8),
-        item: MaybeOwned<'_, ItemData>,
-    ) -> TkAction {
-        let item = item.into_owned();
-        edit.guard.input = item.0;
-        edit.set_error_state(item.2);
-        if edit.has_key_focus() {
-            // assume that the contents of the EditBox are the latest
-            TkAction::empty()
-        } else {
-            edit.set_string(item.1)
-        }
-    }
-
-    fn on_message(
-        &self,
-        mgr: &mut EventMgr,
-        widget: &mut Self::Widget,
-        data: &CellData,
-        key: &(ColKey, u8),
-    ) {
-        if mgr.try_observe_msg::<CellEvent>().is_some() {
-            let mut inner = data.inner.borrow_mut();
-            match inner.cells.entry(*key) {
-                Entry::Occupied(mut entry) => {
-                    entry.get_mut().update(widget.get_str());
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(Cell::new(widget.get_string()));
-                }
-            }
-
-            // TODO: we should not recompute everything here!
-            inner.update_values();
-            inner.version += 1;
-            mgr.update_all(0);
-        }
+    fn make(&mut self, key: &Key) -> Self::Widget {
+        EditBox::new(CellGuard {
+            key: *key,
+            is_input: false,
+        })
     }
 }
 
-pub fn window() -> Box<dyn Window> {
+pub fn window() -> Window<()> {
     let mut data = CellData::new();
-    let inner = data.inner.get_mut();
-    let cells = &mut inner.cells;
+    let cells = &mut data.cells;
     cells.insert(make_key("A1"), Cell::new("Some values"));
     cells.insert(make_key("A2"), Cell::new("3"));
     cells.insert(make_key("A3"), Cell::new("4"));
@@ -500,46 +468,51 @@ pub fn window() -> Box<dyn Window> {
     cells.insert(make_key("B2"), Cell::new("= A2 + A3 + A4"));
     cells.insert(make_key("C1"), Cell::new("Prod"));
     cells.insert(make_key("C2"), Cell::new("= A2 * A3 * A4"));
-    inner.update_values();
+    data.update_values();
 
-    let cells = MatrixView::new_with_driver(CellDriver, data).with_num_visible(5, 20);
+    let cells = MatrixView::new(CellDriver).with_num_visible(5, 20);
 
-    Box::new(singleton! {
-        #[derive(Debug)]
+    let ui = impl_anon! {
         #[widget {
             layout = self.cells;
         }]
         struct {
             core: widget_core!(),
-            #[widget] cells: ScrollBars<MatrixView<CellData, CellDriver>> =
+            data: CellData = data,
+            #[widget(&self.data)] cells: ScrollBars<MatrixView<CellData, CellDriver>> =
                 ScrollBars::new(cells),
         }
-        impl Widget for Self {
-            fn steal_event(&mut self, mgr: &mut EventMgr, _: &WidgetId, event: &Event) -> Response {
+        impl Events for Self {
+            type Data = ();
+
+            fn steal_event(&mut self, cx: &mut EventCx, _: &(), _: &Id, event: &Event) -> IsUsed {
                 match event {
-                    Event::Command(Command::Enter) => {
-                        if let Some((col, row)) = mgr.nav_focus().and_then(|id| {
-                            self.cells.data().reconstruct_key(self.cells.inner().id_ref(), id)
+                    Event::Command(Command::Enter, _) => {
+                        if let Some(Key(col, row)) = cx.nav_focus().and_then(|id| {
+                            Key::reconstruct_key(self.cells.inner().id_ref(), id)
                         })
                         {
-                            let row = if mgr.modifiers().shift() {
+                            let row = if cx.modifiers().shift_key() {
                                 (row - 1).max(1)
                             } else {
                                 (row + 1).min(MAX_ROW)
                             };
-                            let id = self.cells.data().make_id(self.cells.inner().id_ref(), &(col, row));
-                            mgr.next_nav_focus_from(&mut self.cells, id, true);
+                            let id = Key(col, row).make_id(self.cells.inner().id_ref());
+                            cx.next_nav_focus(Some(id), false, FocusSource::Synthetic);
                         }
-                        Response::Used
+                        IsUsed::Used
                     },
-                    _ => Response::Unused
+                    _ => IsUsed::Unused
+                }
+            }
+
+            fn handle_messages(&mut self, cx: &mut EventCx, _: &()) {
+                if let Some(UpdateInput(key, input)) = cx.try_pop() {
+                    self.data.cells.entry(key).or_default().update(input);
+                    self.data.update_values();
                 }
             }
         }
-        impl Window for Self {
-            fn title(&self) -> &str {
-                "Cells"
-            }
-        }
-    })
+    };
+    Window::new(ui, "Cells")
 }
