@@ -5,129 +5,184 @@
 
 //! Flight booker
 
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{Duration, Local, NaiveDate, ParseError};
 use kas::prelude::*;
 use kas::widgets::dialog::MessageBox;
-use kas::widgets::menu::MenuEntry;
-use kas::widgets::{ComboBox, EditBox, EditField, EditGuard, TextButton};
+use kas::widgets::{label_any, Adapt, Button, ComboBox, EditBox, EditField, EditGuard, Text};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Flight {
+    #[default]
     OneWay,
     Return,
 }
+
+#[derive(Debug)]
+enum Error {
+    None,
+    OutParse(ParseError),
+    RetParse(ParseError),
+    OutBeforeToday,
+    ReturnTooSoon,
+}
+impl Error {
+    fn is_none(&self) -> bool {
+        matches!(self, Error::None)
+    }
+}
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::None => Ok(()),
+            Error::OutParse(err) => f.write_fmt(format_args!("Error: outbound date: {err}")),
+            Error::RetParse(err) => f.write_fmt(format_args!("Error: return date: {err}")),
+            Error::OutBeforeToday => f.write_str("Error: outbound date is before today!"),
+            Error::ReturnTooSoon => f.write_str("Error: return date must be after outbound date!"),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Data {
+    out: Result<NaiveDate, ParseError>,
+    ret: Result<NaiveDate, ParseError>,
+    flight: Flight,
+    error: Error,
+}
+impl Data {
+    fn update_error(&mut self) {
+        self.error = match self.out {
+            Ok(out_date) => {
+                if out_date < Local::now().naive_local().date() {
+                    Error::OutBeforeToday
+                } else {
+                    match (self.flight, self.ret) {
+                        (Flight::OneWay, _) => Error::None,
+                        (Flight::Return, Ok(ret_date)) => {
+                            if ret_date < out_date {
+                                Error::ReturnTooSoon
+                            } else {
+                                Error::None
+                            }
+                        }
+                        (Flight::Return, Err(err)) => Error::RetParse(err),
+                    }
+                }
+            }
+            Err(err) => Error::OutParse(err),
+        };
+    }
+}
+
 #[derive(Clone, Debug)]
-struct ActionDates;
+struct ActionDate {
+    result: Result<NaiveDate, ParseError>,
+    is_return_field: bool,
+}
+
 #[derive(Clone, Debug)]
 struct ActionBook;
 
-// TODO: consider adding a view-and-edit widget (like SingleView but supporting
-// text editing) so that string representation is just a view of date repr.
 #[derive(Clone, Debug)]
 struct Guard {
-    date: Option<NaiveDate>,
+    is_return_field: bool,
 }
 impl Guard {
-    fn new(date: NaiveDate) -> Self {
-        Guard { date: Some(date) }
+    fn new(is_return_field: bool) -> Self {
+        Guard { is_return_field }
     }
 }
 impl EditGuard for Guard {
-    fn edit(edit: &mut EditField<Self>, mgr: &mut EventMgr) {
-        let date = NaiveDate::parse_from_str(edit.get_str().trim(), "%Y-%m-%d");
-        edit.guard.date = match date {
-            Ok(date) => Some(date),
-            Err(e) => {
-                // TODO: display error in GUI
-                println!("Error parsing date: {e}");
-                None
-            }
-        };
-        edit.set_error_state(edit.guard.date.is_none());
+    type Data = Data;
 
-        // On any change, we notify the parent that it should update the book button:
-        mgr.push_msg(ActionDates);
+    fn edit(edit: &mut EditField<Self>, cx: &mut EventCx, _: &Self::Data) {
+        let result = NaiveDate::parse_from_str(edit.get_str().trim(), "%Y-%m-%d");
+        let act = edit.set_error_state(result.is_err());
+        cx.action(edit.id(), act);
+
+        cx.push(ActionDate {
+            result,
+            is_return_field: edit.guard.is_return_field,
+        });
+    }
+
+    fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, data: &Self::Data) {
+        if !edit.has_edit_focus() && edit.get_str().is_empty() {
+            if let Ok(date) = match edit.guard.is_return_field {
+                false => data.out,
+                true => data.ret,
+            } {
+                let act = edit.set_string(date.format("%Y-%m-%d").to_string());
+                cx.action(edit.id(), act);
+            }
+        }
+        if edit.guard.is_return_field {
+            cx.set_disabled(edit.id(), data.flight == Flight::OneWay);
+        }
     }
 }
 
-pub fn window() -> Box<dyn Window> {
-    // Default dates:
-    let out = Local::today().naive_local();
-    let back = out + Duration::days(7);
+pub fn window() -> Window<()> {
+    let out_date = Local::now().naive_local().date();
+    let data = Data {
+        out: Ok(out_date),
+        ret: Ok(out_date + Duration::days(7)),
+        flight: Flight::OneWay,
+        error: Error::None,
+    };
 
-    let d1 = EditBox::new(out.format("%Y-%m-%d").to_string()).with_guard(Guard::new(out));
-    let d2 = EditBox::new(back.format("%Y-%m-%d").to_string()).with_guard(Guard::new(back));
+    let ui = kas::column![
+        ComboBox::new(
+            [
+                ("One-way flight", Flight::OneWay),
+                ("Return flight", Flight::Return)
+            ],
+            |_, data: &Data| data.flight
+        ),
+        EditBox::new(Guard::new(false)),
+        EditBox::new(Guard::new(true)),
+        Text::new(|_, data: &Data| format!("{}", data.error)),
+        Button::new_msg(label_any("Book"), ActionBook).on_update(
+            |cx, button, data: &Data| cx.set_disabled(button.id(), !data.error.is_none())
+        ),
+    ];
 
-    Box::new(singleton! {
-        #[derive(Debug)]
-        #[widget {
-            layout = column: [
-                self.combo,
-                self.d1,
-                self.d2,
-                self.book,
-            ];
-        }]
-        struct {
-            core: widget_core!(),
-            #[widget] combo: ComboBox<Flight> = ComboBox::new_vec(vec![
-                MenuEntry::new("One-way flight", Flight::OneWay),
-                MenuEntry::new("Return flight", Flight::Return),
-            ]),
-            #[widget] d1: EditBox<Guard> = d1,
-            #[widget] d2: EditBox<Guard> = d2,
-            #[widget] book = TextButton::new_msg("Book", ActionBook),
-        }
-        impl Self {
-            fn update_dates(&mut self, mgr: &mut EventMgr) {
-                let is_ready = match self.d1.guard.date.as_ref() {
-                    None => false,
-                    Some(_) if mgr.is_disabled(self.d2.id_ref()) => true,
-                    Some(d1) => {
-                        match self.d2.guard.date.as_ref() {
-                            None => false,
-                            Some(d2) if d1 < d2 => true,
-                            _ => {
-                                // TODO: display error in GUI
-                                println!("Out-bound flight must be before return flight!");
-                                false
-                            }
-                        }
+    let ui = Adapt::new(ui, data)
+        .on_message(|_, data, flight| {
+            data.flight = flight;
+            data.update_error();
+        })
+        .on_message(|_, data, parse: ActionDate| {
+            if parse.is_return_field {
+                data.ret = parse.result;
+            } else {
+                data.out = parse.result;
+            }
+
+            data.update_error();
+        })
+        .on_messages(|cx, _, data| {
+            if cx.try_pop::<ActionBook>().is_some() {
+                let msg = if !data.error.is_none() {
+                    // should be impossible since the button is disabled
+                    format!("{}", data.error)
+                } else {
+                    match data.flight {
+                        Flight::OneWay => format!(
+                            "You have booked a one-way flight on {}",
+                            data.out.unwrap().format("%Y-%m-%d")
+                        ),
+                        Flight::Return => format!(
+                            "You have booked an out-bound flight on {} and a return flight on {}",
+                            data.out.unwrap().format("%Y-%m-%d"),
+                            data.ret.unwrap().format("%Y-%m-%d"),
+                        ),
                     }
                 };
-                mgr.set_disabled(self.book.id(), !is_ready);
+                cx.add_window::<()>(MessageBox::new(msg).into_window("Booker result"));
             }
-        }
-        impl Widget for Self {
-            fn configure(&mut self, mgr: &mut ConfigMgr) {
-                mgr.set_disabled(self.d2.id(), true);
-            }
-            fn handle_message(&mut self, mgr: &mut EventMgr, _: usize) {
-                if let Some(flight) = mgr.try_pop_msg::<Flight>() {
-                    mgr.set_disabled(self.d2.id(), flight == Flight::OneWay);
-                    self.update_dates(mgr);
-                } else if let Some(ActionDates) = mgr.try_pop_msg() {
-                    self.update_dates(mgr);
-                } else if let Some(ActionBook) = mgr.try_pop_msg() {
-                    let d1 = self.d1.guard.date.unwrap();
-                    let msg = if mgr.is_disabled(self.d2.id_ref()) {
-                        format!("You have booked a one-way flight on {}", d1.format("%Y-%m-%d"))
-                    } else {
-                        let d2 = self.d2.guard.date.unwrap();
-                        format!(
-                            "You have booked an out-bound flight on {} and a return flight on {}",
-                            d1.format("%Y-%m-%d"),
-                            d2.format("%Y-%m-%d"),
-                        )
-                    };
-                    mgr.add_window(Box::new(MessageBox::new("Booker result", msg)));
-                }
-            }
-        }
-        impl Window for Self {
-            fn title(&self) -> &str {
-                "Flight Booker"
-            }
-        }
-    })
+            false
+        });
+
+    Window::new(ui, "Flight Booker")
 }
