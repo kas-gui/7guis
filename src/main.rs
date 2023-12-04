@@ -10,7 +10,7 @@ mod counter;
 // mod crud;
 mod flight_booker;
 mod temp_conv;
-// mod timer;
+mod timer;
 
 use kas::prelude::*;
 use kas::widgets::dialog::MessageBox;
@@ -54,7 +54,7 @@ fn main() -> Result<(), kas::shell::Error> {
                         X::Counter => counter::window(),
                         X::Temp => temp_conv::window(),
                         X::Flight => flight_booker::window(),
-                        // X::Timer => timer::window(),
+                        X::Timer => timer::window(),
                         // X::Crud => crud::window(),
                         // X::Cells => cells::window(),
                         _ => MessageBox::new("Not implemented yet!").into_window("TODO"),
