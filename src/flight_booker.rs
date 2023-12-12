@@ -142,9 +142,8 @@ pub fn window() -> Window<()> {
         EditBox::new(Guard::new(false)),
         EditBox::new(Guard::new(true)),
         Text::new(|_, data: &Data| format!("{}", data.error)),
-        Button::new_msg(label_any("Book"), ActionBook).on_update(
-            |cx, button, data: &Data| cx.set_disabled(button.id(), !data.error.is_none())
-        ),
+        Button::new_msg(label_any("Book"), ActionBook)
+            .on_update(|cx, _, data: &Data| cx.set_disabled(!data.error.is_none())),
     ];
 
     let ui = Adapt::new(ui, data)
@@ -161,27 +160,24 @@ pub fn window() -> Window<()> {
 
             data.update_error();
         })
-        .on_messages(|cx, _, data| {
-            if cx.try_pop::<ActionBook>().is_some() {
-                let msg = if !data.error.is_none() {
-                    // should be impossible since the button is disabled
-                    format!("{}", data.error)
-                } else {
-                    match data.flight {
-                        Flight::OneWay => format!(
-                            "You have booked a one-way flight on {}",
-                            data.out.unwrap().format("%Y-%m-%d")
-                        ),
-                        Flight::Return => format!(
-                            "You have booked an out-bound flight on {} and a return flight on {}",
-                            data.out.unwrap().format("%Y-%m-%d"),
-                            data.ret.unwrap().format("%Y-%m-%d"),
-                        ),
-                    }
-                };
-                cx.add_window::<()>(MessageBox::new(msg).into_window("Booker result"));
-            }
-            false
+        .on_message(|cx, data, ActionBook| {
+            let msg = if !data.error.is_none() {
+                // should be impossible since the button is disabled
+                format!("{}", data.error)
+            } else {
+                match data.flight {
+                    Flight::OneWay => format!(
+                        "You have booked a one-way flight on {}",
+                        data.out.unwrap().format("%Y-%m-%d")
+                    ),
+                    Flight::Return => format!(
+                        "You have booked an out-bound flight on {} and a return flight on {}",
+                        data.out.unwrap().format("%Y-%m-%d"),
+                        data.ret.unwrap().format("%Y-%m-%d"),
+                    ),
+                }
+            };
+            cx.add_window::<()>(MessageBox::new(msg).into_window("Booker result"));
         });
 
     Window::new(ui, "Flight Booker")

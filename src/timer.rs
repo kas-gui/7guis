@@ -50,7 +50,7 @@ pub fn window() -> Window<()> {
             data.start = Some(Instant::now());
             cx.request_timer(TIMER_ID, TIMER_SLEEP);
         })
-        .on_timer(TIMER_ID, |cx, _, data| {
+        .on_timer(TIMER_ID, |cx, data, _| {
             if let Some(start) = data.start {
                 data.elapsed = data.duration.min(Instant::now() - start);
                 if data.elapsed < data.duration {
@@ -63,26 +63,21 @@ pub fn window() -> Window<()> {
                 false
             }
         })
-        .on_messages(|cx, _, data| {
-            if let Some(dur) = cx.try_pop() {
-                data.duration = dur;
-                if let Some(start) = data.start {
-                    data.elapsed = data.duration.min(Instant::now() - start);
-                    if data.elapsed >= data.duration {
-                        data.start = None;
-                    }
-                } else if data.elapsed < data.duration {
-                    data.start = Some(Instant::now() - data.elapsed);
-                    cx.request_timer(TIMER_ID, Duration::ZERO);
+        .on_message(|cx, data, dur| {
+            data.duration = dur;
+            if let Some(start) = data.start {
+                data.elapsed = data.duration.min(Instant::now() - start);
+                if data.elapsed >= data.duration {
+                    data.start = None;
                 }
-                true
-            } else if let Some(ActionReset) = cx.try_pop() {
-                data.start = Some(Instant::now());
-                cx.request_timer(TIMER_ID, TIMER_SLEEP);
-                true
-            } else {
-                false
+            } else if data.elapsed < data.duration {
+                data.start = Some(Instant::now() - data.elapsed);
+                cx.request_timer(TIMER_ID, Duration::ZERO);
             }
+        })
+        .on_message(|cx, data, ActionReset| {
+            data.start = Some(Instant::now());
+            cx.request_timer(TIMER_ID, TIMER_SLEEP);
         });
 
     Window::new(ui, "Timer")

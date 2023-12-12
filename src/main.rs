@@ -27,7 +27,7 @@ enum X {
     Cells,
 }
 
-fn main() -> Result<(), kas::shell::Error> {
+fn main() -> Result<(), kas::app::Error> {
     env_logger::init();
 
     let ui = impl_anon! {
@@ -66,7 +66,8 @@ fn main() -> Result<(), kas::shell::Error> {
     let window = Window::new(ui, "7GUIs Launcher");
 
     let theme = kas::theme::FlatTheme::new();
-    let mut shell = kas::shell::Default::with_theme(theme).build(())?;
-    shell.add(window);
-    shell.run()
+    kas::app::Default::with_theme(theme)
+        .build(())?
+        .with(window)
+        .run()
 }

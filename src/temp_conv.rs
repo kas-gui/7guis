@@ -40,9 +40,9 @@ impl_scope! {
 
 pub fn window() -> Window<()> {
     let ui = kas::row![
-        EditBox::parser(|temp: &Temperature| temp.celsius, Message::FromCelsius),
+        EditBox::instant_parser(|temp: &Temperature| temp.celsius, Message::FromCelsius),
         "Celsius =",
-        EditBox::parser(
+        EditBox::instant_parser(
             |temp: &Temperature| temp.fahrenheit,
             Message::FromFahrenheit
         ),
