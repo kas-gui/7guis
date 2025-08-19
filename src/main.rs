@@ -7,7 +7,7 @@
 
 // mod cells;
 mod counter;
-// mod crud;
+mod crud;
 mod flight_booker;
 mod temp_conv;
 mod timer;
@@ -37,7 +37,7 @@ fn main() -> Result<(), kas::runner::Error> {
             Button::label_msg("Tem&perature Converter", X::Temp),
             Button::label_msg("&Flight Booker", X::Flight),
             Button::label_msg("&Timer", X::Timer),
-            Button::label_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
+            Button::label_msg("CRUD (Create, Read, &Update and Delete)", X::Crud),
             Button::label_msg("Ci&rcle Drawer", X::Circle),
             Button::label_msg("Ce&lls", X::Cells),
         ])]
@@ -54,7 +54,7 @@ fn main() -> Result<(), kas::runner::Error> {
                         X::Temp => temp_conv::window(),
                         X::Flight => flight_booker::window(),
                         X::Timer => timer::window(),
-                        // X::Crud => crud::window(),
+                        X::Crud => crud::window(),
                         // X::Cells => cells::window(),
                         _ => MessageBox::new("Not implemented yet!").into_window("TODO"),
                     });

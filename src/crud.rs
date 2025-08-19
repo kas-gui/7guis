@@ -5,13 +5,12 @@
 
 //! Create Read Update Delete
 
+use kas::dir::Down;
 use kas::prelude::*;
-use kas::view::filter::{
-    ContainsCaseInsensitive, Filter, FilterList, KeystrokeGuard, SetFilter, UnsafeFilteredList,
-};
-use kas::view::{Driver, ListView, SelectionMode, SelectionMsg};
+use kas::view::filter::{ContainsCaseInsensitive, Filter, FilterValue, KeystrokeGuard, SetFilter};
+use kas::view::{DataChanges, DataClerk, DataLen, Driver, ListView, SelectionMsg, TokenChanges};
 use kas::widgets::edit::{EditBox, EditField, EditGuard};
-use kas::widgets::{AccessLabel, Button, Frame, NavFrame, ScrollBars, Text};
+use kas::widgets::{AccessLabel, Button, ScrollBars, Text};
 
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -31,8 +30,8 @@ impl Entry {
 }
 impl Filter<Entry> for ContainsCaseInsensitive {
     fn matches(&self, item: &Entry) -> bool {
-        Filter::<&str>::matches(self, &item.first.as_str())
-            || Filter::<&str>::matches(self, &item.last.as_str())
+        Filter::<str>::matches(self, item.first.as_str())
+            || Filter::<str>::matches(self, item.last.as_str())
     }
 }
 
@@ -51,30 +50,26 @@ impl EditGuard for NameGuard {
     type Data = Option<Entry>;
 
     fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, data: &Self::Data) {
-        let mut act = Action::empty();
         if let Some(entry) = data.as_ref() {
             let name = match edit.guard.is_last {
                 false => &entry.first,
                 true => &entry.last,
             };
-            act = edit.set_str(name);
+            edit.set_string(cx, name.clone());
         }
-        act |= edit.set_error_state(edit.get_str().is_empty());
-        cx.action(edit, act);
+        edit.set_error_state(cx, edit.as_str().is_empty());
     }
 }
 
 impl_scope! {
     #[impl_default]
-    #[widget {
-        Data = Option<Entry>;
-        layout = grid! {
-            (0, 0) => "First name:",
-            (1, 0) => self.firstname,
-            (0, 1) => "Surname:",
-            (1, 1) => self.surname,
-        };
-    }]
+    #[widget]
+    #[layout(grid! {
+        (0, 0) => "First name:",
+        (1, 0) => self.firstname,
+        (0, 1) => "Surname:",
+        (1, 1) => self.surname,
+    })]
     struct Editor {
         core: widget_core!(),
         #[widget] firstname: EditBox<NameGuard> = EditBox::new(NameGuard { is_last: false }),
@@ -82,35 +77,37 @@ impl_scope! {
     }
     impl Self {
         fn make_item(&self) -> Option<Entry> {
-            let last = self.surname.get_string();
+            let last = self.surname.clone_string();
             if last.is_empty() {
                 return None;
             }
-            Some(Entry::new(last, self.firstname.get_string()))
+            Some(Entry::new(last, self.firstname.clone_string()))
         }
+    }
+    impl Events for Self {
+        type Data = Option<Entry>;
     }
 }
 
 impl_scope! {
     #[impl_default]
-    #[widget {
-        layout = row! [
-            Button::label_msg("Create", Control::Create).map_any(),
-            self.update,
-            self.delete,
-        ];
-    }]
+    #[widget]
+    #[layout(row! [
+        Button::label_msg("Create", Control::Create).map_any(),
+        self.update,
+        self.delete,
+    ])]
     struct Controls {
         core: widget_core!(),
         #[widget(&())] update: Button<AccessLabel> = Button::label_msg("Update", Control::Update),
         #[widget(&())] delete: Button<AccessLabel> = Button::label_msg("Delete", Control::Delete),
     }
     impl Events for Self {
-        type Data = bool;
+        type Data = Option<Entry>;
 
-        fn update(&mut self, cx: &mut ConfigCx, any_selected: &bool) {
+        fn update(&mut self, cx: &mut ConfigCx, selected: &Self::Data) {
             if self.update.id_ref().is_valid() {
-                let disable = !any_selected;
+                let disable = selected.is_none();
                 cx.set_disabled(self.update.id(), disable);
                 cx.set_disabled(self.delete.id(), disable);
             }
@@ -118,48 +115,100 @@ impl_scope! {
     }
 }
 
-pub fn window() -> Window<()> {
-    struct ListGuard;
-    type FilteredList = UnsafeFilteredList<Vec<Entry>>;
-    impl Driver<Entry, FilteredList> for ListGuard {
-        type Widget = NavFrame<Text<Entry, String>>;
-        fn make(&mut self, _: &usize) -> Self::Widget {
-            NavFrame::new(Text::new(Entry::format))
+struct EntriesClerk {
+    entries: Vec<Entry>,
+    filtered_entries: Vec<usize>,
+}
+
+impl DataClerk<usize> for EntriesClerk {
+    type Data = ContainsCaseInsensitive;
+    type Key = usize; // NOTE: using usize as Key is not ideal since it changes when entries are inserted or deleted
+    type Item = Entry;
+    type Token = usize;
+
+    fn update(&mut self, _: &mut ConfigCx, _: Id, filter: &Self::Data) -> DataChanges {
+        // TODO(opt) determine when updates are a no-op and return DataChanges::None
+
+        self.filtered_entries = self
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| filter.matches(*entry))
+            .map(|(i, _)| i)
+            .collect();
+
+        DataChanges::Any
+    }
+
+    fn len(&self, _: &Self::Data, _: usize) -> DataLen<usize> {
+        DataLen::Known(self.filtered_entries.len())
+    }
+
+    fn update_token(
+        &self,
+        _: &Self::Data,
+        index: usize,
+        _: bool,
+        token: &mut Option<usize>,
+    ) -> TokenChanges {
+        let key = self.filtered_entries.get(index).cloned();
+        if *token == key {
+            TokenChanges::None
+        } else {
+            *token = key;
+            TokenChanges::Any
         }
     }
-    let filter = ContainsCaseInsensitive::new();
-    let guard = KeystrokeGuard;
-    type MyListView = ListView<UnsafeFilteredList<Vec<Entry>>, ListGuard, kas::dir::Down>;
-    type MyFilterList = FilterList<Vec<Entry>, ContainsCaseInsensitive, MyListView>;
-    let list_view = MyListView::new(ListGuard).with_selection_mode(SelectionMode::Single);
+
+    fn item(&self, _: &Self::Data, key: &usize) -> &Entry {
+        self.entries.get(*key).unwrap()
+    }
+}
+
+pub fn window() -> Window<()> {
+    struct EntriesDriver;
+    impl Driver<usize, Entry> for EntriesDriver {
+        type Widget = Text<Entry, String>;
+        fn make(&mut self, _: &usize) -> Self::Widget {
+            Text::new(Entry::format)
+        }
+        fn navigable(_: &Self::Widget) -> bool {
+            false
+        }
+    }
+
+    type EntriesView = ListView<EntriesClerk, EntriesDriver, Down>;
+    let clerk = EntriesClerk {
+        entries: vec![
+            Entry::new("Emil", "Hans"),
+            Entry::new("Mustermann", "Max"),
+            Entry::new("Tisch", "Roman"),
+        ],
+        filtered_entries: vec![],
+    };
 
     let ui = impl_anon! {
-        #[widget {
-            layout = grid! {
-                (0, 0) => "Filter:",
-                (1, 0) => self.filter,
-                (0..2, 1..3) => self.list,
-                (3, 1) => self.editor,
-                (0..4, 3) => self.controls,
-            };
-        }]
+        #[widget]
+        #[layout(grid! {
+            (0, 0) => "Filter:",
+            (1, 0) => self.filter_field,
+            (0..2, 1..3) => frame!(self.list),
+            (3, 1) => self.editor,
+            (0..4, 3) => self.controls,
+        })]
         struct {
             core: widget_core!(),
-            #[widget(&())] filter: EditBox<KeystrokeGuard> = EditBox::new(guard),
-            #[widget(&self.entries)] list: Frame<ScrollBars<MyFilterList>> =
-                Frame::new(ScrollBars::new(FilterList::new(list_view, filter))),
+            #[widget(&())] filter_field: EditBox<KeystrokeGuard> = EditBox::new(KeystrokeGuard),
+            #[widget(&self.filter)] list: ScrollBars<EntriesView> =
+                ScrollBars::new(EntriesView::new(clerk, EntriesDriver).with_selection_mode(kas::view::SelectionMode::Single)),
             #[widget(&self.selected)] editor: Editor = Editor::default(),
-            #[widget(&self.selected.is_some())] controls: Controls = Controls::default(),
-            entries: Vec<Entry> = vec![
-                Entry::new("Emil", "Hans"),
-                Entry::new("Mustermann", "Max"),
-                Entry::new("Tisch", "Roman"),
-            ],
+            #[widget(&self.selected)] controls: Controls = Controls::default(),
+            filter: ContainsCaseInsensitive,
             selected: Option<Entry>,
         }
         impl Self {
             fn selected(&self) -> Option<usize> {
-                self.list.selected_iter().next().cloned()
+                self.list.inner().selected_iter().next().cloned()
             }
         }
         impl Events for Self {
@@ -167,36 +216,38 @@ pub fn window() -> Window<()> {
 
             fn handle_messages(&mut self, cx: &mut EventCx, _: &()) {
                 if let Some(SetFilter(value)) = cx.try_pop() {
-                    self.list.set_filter(&mut cx.config_cx(), &self.entries, value);
+                    self.filter.set_filter(value);
+                    cx.update(self.list.as_node(&self.filter));
                 } else if let Some(SelectionMsg::Select(key)) = cx.try_pop() {
-                    self.selected = self.entries.get::<usize>(key).cloned();
+                    self.selected = self.list.inner().clerk().entries.get::<usize>(key).cloned();
                     cx.update(self.as_node(&()));
                 } else if let Some(control) = cx.try_pop() {
                     match control {
                         Control::Create => {
                             if let Some(item) = self.editor.make_item() {
-                                let index = self.entries.len();
-                                self.entries.push(item);
-                                let action = self.list.select(index);
-                                cx.action(&self, action);
-                                self.selected = self.entries.get(index).cloned();
+                                let index = self.list.inner().clerk().entries.len();
+                                self.list.inner_mut().clerk_mut().entries.push(item);
+                                cx.update(self.list.as_node(&self.filter));
+                                self.list.inner_mut().select(cx, index);
+                                self.selected = self.list.inner().clerk().entries.get(index).cloned();
                                 cx.update(self.as_node(&()));
                             }
                         }
                         Control::Update => {
                             if let Some(index) = self.selected() {
                                 if let Some(item) = self.editor.make_item() {
-                                    self.entries[index] = item;
+                                    self.list.inner_mut().clerk_mut().entries[index] = item;
+                                    cx.update(self.list.as_node(&self.filter));
                                     cx.update(self.as_node(&()));
                                 }
                             }
                         }
                         Control::Delete => {
                             if let Some(index) = self.selected() {
-                                self.entries.remove(index);
-                                let action = self.list.select(index);
-                                cx.action(&self, action);
-                                self.selected = self.entries.get(index).cloned();
+                                self.list.inner_mut().clerk_mut().entries.remove(index);
+                                cx.update(self.list.as_node(&self.filter));
+                                self.list.inner_mut().select(cx, index);
+                                self.selected = self.list.inner().clerk().entries.get(index).cloned();
                                 cx.update(self.as_node(&()));
                             }
                         }
