@@ -8,7 +8,7 @@
 use chrono::{Duration, Local, NaiveDate, ParseError};
 use kas::prelude::*;
 use kas::widgets::dialog::MessageBox;
-use kas::widgets::{label_any, Adapt, Button, ComboBox, EditBox, EditField, EditGuard, Text};
+use kas::widgets::{column, Adapt, Button, ComboBox, EditBox, EditField, EditGuard, Text};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Flight {
@@ -96,9 +96,8 @@ impl EditGuard for Guard {
     type Data = Data;
 
     fn edit(edit: &mut EditField<Self>, cx: &mut EventCx, _: &Self::Data) {
-        let result = NaiveDate::parse_from_str(edit.get_str().trim(), "%Y-%m-%d");
-        let act = edit.set_error_state(result.is_err());
-        cx.action(edit.id(), act);
+        let result = NaiveDate::parse_from_str(edit.as_str().trim(), "%Y-%m-%d");
+        edit.set_error_state(cx, result.is_err());
 
         cx.push(ActionDate {
             result,
@@ -107,13 +106,12 @@ impl EditGuard for Guard {
     }
 
     fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, data: &Self::Data) {
-        if !edit.has_edit_focus() && edit.get_str().is_empty() {
+        if !edit.has_edit_focus() && edit.as_str().is_empty() {
             if let Ok(date) = match edit.guard.is_return_field {
                 false => data.out,
                 true => data.ret,
             } {
-                let act = edit.set_string(date.format("%Y-%m-%d").to_string());
-                cx.action(edit.id(), act);
+                edit.set_string(cx, date.format("%Y-%m-%d").to_string());
             }
         }
         if edit.guard.is_return_field {
@@ -131,18 +129,19 @@ pub fn window() -> Window<()> {
         error: Error::None,
     };
 
-    let ui = kas::column![
+    let ui = column![
         ComboBox::new(
             [
-                ("One-way flight", Flight::OneWay),
-                ("Return flight", Flight::Return)
+                ("&One-way flight", Flight::OneWay),
+                ("&Return flight", Flight::Return)
             ],
             |_, data: &Data| data.flight
         ),
         EditBox::new(Guard::new(false)),
         EditBox::new(Guard::new(true)),
         Text::new(|_, data: &Data| format!("{}", data.error)),
-        Button::new_msg(label_any("Book"), ActionBook)
+        Button::label_msg("&Book", ActionBook)
+            .map_any()
             .on_update(|cx, _, data: &Data| cx.set_disabled(!data.error.is_none())),
     ];
 

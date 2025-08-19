@@ -8,7 +8,7 @@
 // mod cells;
 mod counter;
 // mod crud;
-// mod flight_booker;
+mod flight_booker;
 mod temp_conv;
 // mod timer;
 
@@ -35,7 +35,7 @@ fn main() -> Result<(), kas::runner::Error> {
         #[layout(column! [
             Button::label_msg("&Counter", X::Counter),
             Button::label_msg("Tem&perature Converter", X::Temp),
-            Button::label_msg("&Flight &Booker", X::Flight),
+            Button::label_msg("&Flight Booker", X::Flight),
             Button::label_msg("&Timer", X::Timer),
             Button::label_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
             Button::label_msg("Ci&rcle Drawer", X::Circle),
@@ -52,7 +52,7 @@ fn main() -> Result<(), kas::runner::Error> {
                     cx.add_window(match x {
                         X::Counter => counter::window(),
                         X::Temp => temp_conv::window(),
-                        // X::Flight => flight_booker::window(),
+                        X::Flight => flight_booker::window(),
                         // X::Timer => timer::window(),
                         // X::Crud => crud::window(),
                         // X::Cells => cells::window(),
