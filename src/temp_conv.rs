@@ -6,7 +6,7 @@
 //! Temperature converter
 
 use kas::prelude::*;
-use kas::widgets::{Adapt, EditBox};
+use kas::widgets::{row, Adapt, EditBox};
 
 #[derive(Clone, Debug)]
 enum Message {
@@ -39,7 +39,7 @@ impl_scope! {
 }
 
 pub fn window() -> Window<()> {
-    let ui = kas::row![
+    let ui = row![
         EditBox::instant_parser(|temp: &Temperature| temp.celsius, Message::FromCelsius),
         "Celsius =",
         EditBox::instant_parser(

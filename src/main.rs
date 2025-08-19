@@ -5,12 +5,12 @@
 
 //! 7-GUIs launcher
 
-mod cells;
+// mod cells;
 mod counter;
-mod crud;
-mod flight_booker;
+// mod crud;
+// mod flight_booker;
 mod temp_conv;
-mod timer;
+// mod timer;
 
 use kas::prelude::*;
 use kas::widgets::dialog::MessageBox;
@@ -27,21 +27,20 @@ enum X {
     Cells,
 }
 
-fn main() -> Result<(), kas::app::Error> {
+fn main() -> Result<(), kas::runner::Error> {
     env_logger::init();
 
     let ui = impl_anon! {
-        #[widget {
-            layout = column! [
-                Button::label_msg("&Counter", X::Counter),
-                Button::label_msg("Tem&perature Converter", X::Temp),
-                Button::label_msg("&Flight &Booker", X::Flight),
-                Button::label_msg("&Timer", X::Timer),
-                Button::label_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
-                Button::label_msg("Ci&rcle Drawer", X::Circle),
-                Button::label_msg("Ce&lls", X::Cells),
-            ];
-        }]
+        #[widget]
+        #[layout(column! [
+            Button::label_msg("&Counter", X::Counter),
+            Button::label_msg("Tem&perature Converter", X::Temp),
+            Button::label_msg("&Flight &Booker", X::Flight),
+            Button::label_msg("&Timer", X::Timer),
+            Button::label_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
+            Button::label_msg("Ci&rcle Drawer", X::Circle),
+            Button::label_msg("Ce&lls", X::Cells),
+        ])]
         struct {
             core: widget_core!(),
         }
@@ -53,10 +52,10 @@ fn main() -> Result<(), kas::app::Error> {
                     cx.add_window(match x {
                         X::Counter => counter::window(),
                         X::Temp => temp_conv::window(),
-                        X::Flight => flight_booker::window(),
-                        X::Timer => timer::window(),
-                        X::Crud => crud::window(),
-                        X::Cells => cells::window(),
+                        // X::Flight => flight_booker::window(),
+                        // X::Timer => timer::window(),
+                        // X::Crud => crud::window(),
+                        // X::Cells => cells::window(),
                         _ => MessageBox::new("Not implemented yet!").into_window("TODO"),
                     });
                 }
@@ -66,7 +65,7 @@ fn main() -> Result<(), kas::app::Error> {
     let window = Window::new(ui, "7GUIs Launcher");
 
     let theme = kas::theme::FlatTheme::new();
-    kas::app::Default::with_theme(theme)
+    kas::runner::Runner::with_theme(theme)
         .build(())?
         .with(window)
         .run()

@@ -6,19 +6,18 @@
 //! Counter
 
 use kas::prelude::*;
-use kas::widgets::{Adapt, Button, EditBox};
+use kas::widgets::{row, Button, EditBox};
 
 #[derive(Clone, Debug)]
 struct Incr;
 
 pub fn window() -> Window<()> {
-    let ui = kas::row![
-        align!(
-            right,
-            EditBox::string(|count| format!("{count}")).with_width_em(3.0, 3.0)
-        ),
-        Button::label_msg("Count", Incr).map_any(),
+    let ui = row![
+        EditBox::string(|count| format!("{count}"))
+            .with_width_em(3.0, 3.0)
+            .align(AlignHints::RIGHT),
+        Button::label_msg("&Count", Incr).map_any(),
     ];
-    let ui = Adapt::new(ui, 0).on_message(|_, count, Incr| *count += 1);
+    let ui = ui.with_state(0).on_message(|_, count, Incr| *count += 1);
     Window::new(ui, "Counter")
 }
