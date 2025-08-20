@@ -6,11 +6,11 @@
 //! Create Read Update Delete
 
 use kas::dir::Down;
-use kas::prelude::*;
 use kas::view::filter::{ContainsCaseInsensitive, Filter, FilterValue, KeystrokeGuard, SetFilter};
 use kas::view::{DataChanges, DataClerk, DataLen, Driver, ListView, SelectionMsg, TokenChanges};
 use kas::widgets::edit::{EditBox, EditField, EditGuard};
 use kas::widgets::{AccessLabel, Button, ScrollBars, Text};
+use kas::{prelude::*, TextOrSource};
 
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -179,11 +179,17 @@ pub fn window() -> Window<()> {
     struct EntriesDriver;
     impl Driver<usize, Entry> for EntriesDriver {
         type Widget = Text<Entry, String>;
+
         fn make(&mut self, _: &usize) -> Self::Widget {
             Text::new(Entry::format)
         }
+
         fn navigable(_: &Self::Widget) -> bool {
-            false
+            true
+        }
+
+        fn label(widget: &Self::Widget) -> Option<TextOrSource<'_>> {
+            Some(widget.as_str().into())
         }
     }
 
