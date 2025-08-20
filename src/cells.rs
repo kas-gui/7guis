@@ -273,6 +273,7 @@ impl Cell {
             self.display = value.to_string();
             Ok(Some(value))
         } else {
+            self.display = self.input.clone();
             Ok(self.input.parse().ok())
         }
     }
@@ -433,6 +434,7 @@ impl Driver<Key, Cell> for CellDriver {
             key: *key,
             is_input: false,
         })
+        .with_width_em(6.0, 6.0)
     }
 
     fn navigable(_: &Self::Widget) -> bool {
