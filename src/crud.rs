@@ -116,13 +116,15 @@ impl_scope! {
 }
 
 struct EntriesClerk {
-    entries: Vec<Entry>,
+    // Note: deleted entries are replaced with None instead of being removed.
+    // This is an easy way of ensuring that Key-Entry mappings do not change.
+    entries: Vec<Option<Entry>>,
     filtered_entries: Vec<usize>,
 }
 
 impl DataClerk<usize> for EntriesClerk {
     type Data = ContainsCaseInsensitive;
-    type Key = usize; // NOTE: using usize as Key is not ideal since it changes when entries are inserted or deleted
+    type Key = usize;
     type Item = Entry;
     type Token = usize;
 
@@ -133,7 +135,11 @@ impl DataClerk<usize> for EntriesClerk {
             .entries
             .iter()
             .enumerate()
-            .filter(|(_, entry)| filter.matches(*entry))
+            .filter(|(_, opt)| {
+                opt.as_ref()
+                    .map(|entry| filter.matches(entry))
+                    .unwrap_or(false)
+            })
             .map(|(i, _)| i)
             .collect();
 
@@ -161,7 +167,11 @@ impl DataClerk<usize> for EntriesClerk {
     }
 
     fn item(&self, _: &Self::Data, key: &usize) -> &Entry {
-        self.entries.get(*key).unwrap()
+        self.entries
+            .get(*key)
+            .map(|inner| inner.as_ref())
+            .flatten()
+            .unwrap()
     }
 }
 
@@ -180,9 +190,9 @@ pub fn window() -> Window<()> {
     type EntriesView = ListView<EntriesClerk, EntriesDriver, Down>;
     let clerk = EntriesClerk {
         entries: vec![
-            Entry::new("Emil", "Hans"),
-            Entry::new("Mustermann", "Max"),
-            Entry::new("Tisch", "Roman"),
+            Some(Entry::new("Emil", "Hans")),
+            Some(Entry::new("Mustermann", "Max")),
+            Some(Entry::new("Tisch", "Roman")),
         ],
         filtered_entries: vec![],
     };
@@ -219,24 +229,24 @@ pub fn window() -> Window<()> {
                     self.filter.set_filter(value);
                     cx.update(self.list.as_node(&self.filter));
                 } else if let Some(SelectionMsg::Select(key)) = cx.try_pop() {
-                    self.selected = self.list.inner().clerk().entries.get::<usize>(key).cloned();
+                    self.selected = self.list.inner().clerk().entries.get::<usize>(key).cloned().flatten();
                     cx.update(self.as_node(&()));
                 } else if let Some(control) = cx.try_pop() {
                     match control {
                         Control::Create => {
                             if let Some(item) = self.editor.make_item() {
                                 let index = self.list.inner().clerk().entries.len();
-                                self.list.inner_mut().clerk_mut().entries.push(item);
+                                self.list.inner_mut().clerk_mut().entries.push(Some(item));
                                 cx.update(self.list.as_node(&self.filter));
                                 self.list.inner_mut().select(cx, index);
-                                self.selected = self.list.inner().clerk().entries.get(index).cloned();
+                                self.selected = self.list.inner().clerk().entries.get(index).cloned().flatten();
                                 cx.update(self.as_node(&()));
                             }
                         }
                         Control::Update => {
                             if let Some(index) = self.selected() {
                                 if let Some(item) = self.editor.make_item() {
-                                    self.list.inner_mut().clerk_mut().entries[index] = item;
+                                    self.list.inner_mut().clerk_mut().entries[index] = Some(item);
                                     cx.update(self.list.as_node(&self.filter));
                                     cx.update(self.as_node(&()));
                                 }
@@ -244,10 +254,10 @@ pub fn window() -> Window<()> {
                         }
                         Control::Delete => {
                             if let Some(index) = self.selected() {
-                                self.list.inner_mut().clerk_mut().entries.remove(index);
+                                self.list.inner_mut().clerk_mut().entries[index] = None;
                                 cx.update(self.list.as_node(&self.filter));
                                 self.list.inner_mut().select(cx, index);
-                                self.selected = self.list.inner().clerk().entries.get(index).cloned();
+                                self.selected = self.list.inner().clerk().entries.get(index).cloned().flatten();
                                 cx.update(self.as_node(&()));
                             }
                         }
