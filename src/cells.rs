@@ -273,7 +273,6 @@ impl Cell {
             self.display = value.to_string();
             Ok(Some(value))
         } else {
-            self.display = self.input.clone();
             Ok(self.input.parse().ok())
         }
     }
@@ -397,7 +396,12 @@ impl EditGuard for CellGuard {
     fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, item: &Cell) {
         edit.set_error_state(cx, item.parse_error);
         if !edit.has_edit_focus() {
-            edit.set_string(cx, item.display.to_string());
+            let text = if !item.display.is_empty() {
+                &item.display
+            } else {
+                &item.input
+            };
+            edit.set_str(cx, text);
             edit.guard.is_input = false;
         }
     }
@@ -408,7 +412,7 @@ impl EditGuard for CellGuard {
     }
 
     fn focus_gained(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Cell) {
-        edit.set_string(cx, item.input.to_string());
+        edit.set_str(cx, &item.input);
         edit.guard.is_input = true;
     }
 
@@ -502,6 +506,7 @@ pub fn window() -> Window<()> {
                 if let Some(UpdateInput(key, input)) = cx.try_pop() {
                     self.data.cells.entry(key).or_default().update(input);
                     self.data.update_values();
+                    cx.update(self.cells.as_node(&self.data));
                 }
             }
         }

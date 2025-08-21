@@ -55,7 +55,7 @@ impl EditGuard for NameGuard {
                 false => &entry.first,
                 true => &entry.last,
             };
-            edit.set_string(cx, name.clone());
+            edit.set_str(cx, name);
         }
         edit.set_error_state(cx, edit.as_str().is_empty());
     }
