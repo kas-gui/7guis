@@ -5,7 +5,6 @@
 
 //! Cells: a mini spreadsheet
 
-use kas::event::{Command, FocusSource};
 use kas::view::{
     DataChanges, DataClerk, DataKey, DataLen, Driver, GridIndex, GridView, TokenChanges,
 };
@@ -38,7 +37,6 @@ impl fmt::Display for ColKey {
 }
 
 const ROW_LEN: u32 = 100;
-const MAX_ROW: u8 = 99;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Key(ColKey, u8);
@@ -417,9 +415,8 @@ impl EditGuard for CellGuard {
     }
 
     fn focus_lost(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Cell) {
-        let s = edit.clone_string();
-        if edit.guard.is_input && s != item.input {
-            cx.push(UpdateInput(edit.guard.key, s));
+        if edit.guard.is_input && edit.as_str() != item.input {
+            cx.push(UpdateInput(edit.guard.key, edit.clone_string()));
         }
     }
 }
@@ -442,7 +439,7 @@ impl Driver<Key, Cell> for CellDriver {
     }
 
     fn navigable(_: &Self::Widget) -> bool {
-        true
+        false
     }
 
     fn label(widget: &Self::Widget) -> Option<TextOrSource<'_>> {
@@ -480,27 +477,6 @@ pub fn window() -> Window<()> {
         }
         impl Events for Self {
             type Data = ();
-
-            fn handle_event(&mut self, cx: &mut EventCx, _: &(), event: Event) -> IsUsed {
-                match event {
-                    Event::Command(Command::Enter, _) => {
-                        if let Some(Key(col, row)) = cx.nav_focus().and_then(|id| {
-                            Key::reconstruct_key(self.cells.inner().id_ref(), id)
-                        })
-                        {
-                            let row = if cx.modifiers().shift_key() {
-                                (row - 1).max(1)
-                            } else {
-                                (row + 1).min(MAX_ROW)
-                            };
-                            let id = Key(col, row).make_id(self.cells.inner().id_ref());
-                            cx.next_nav_focus(Some(id), false, FocusSource::Synthetic);
-                        }
-                        IsUsed::Used
-                    },
-                    _ => IsUsed::Unused
-                }
-            }
 
             fn handle_messages(&mut self, cx: &mut EventCx, _: &()) {
                 if let Some(UpdateInput(key, input)) = cx.try_pop() {
