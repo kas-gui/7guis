@@ -27,21 +27,20 @@ enum X {
     Cells,
 }
 
-fn main() -> Result<(), kas::app::Error> {
+fn main() -> Result<(), kas::runner::Error> {
     env_logger::init();
 
     let ui = impl_anon! {
-        #[widget {
-            layout = column! [
-                Button::label_msg("&Counter", X::Counter),
-                Button::label_msg("Tem&perature Converter", X::Temp),
-                Button::label_msg("&Flight &Booker", X::Flight),
-                Button::label_msg("&Timer", X::Timer),
-                Button::label_msg("CRUD (Create, Read, &Update and &Delete)", X::Crud),
-                Button::label_msg("Ci&rcle Drawer", X::Circle),
-                Button::label_msg("Ce&lls", X::Cells),
-            ];
-        }]
+        #[widget]
+        #[layout(column! [
+            Button::label_msg("&Counter", X::Counter),
+            Button::label_msg("Tem&perature Converter", X::Temp),
+            Button::label_msg("&Flight Booker", X::Flight),
+            Button::label_msg("&Timer", X::Timer),
+            Button::label_msg("CRUD (Create, Read, &Update and Delete)", X::Crud),
+            Button::label_msg("Ci&rcle Drawer", X::Circle),
+            Button::label_msg("Ce&lls", X::Cells),
+        ])]
         struct {
             core: widget_core!(),
         }
@@ -66,7 +65,7 @@ fn main() -> Result<(), kas::app::Error> {
     let window = Window::new(ui, "7GUIs Launcher");
 
     let theme = kas::theme::FlatTheme::new();
-    kas::app::Default::with_theme(theme)
+    kas::runner::Runner::with_theme(theme)
         .build(())?
         .with(window)
         .run()

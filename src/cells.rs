@@ -5,30 +5,27 @@
 
 //! Cells: a mini spreadsheet
 
-use kas::event::{Command, FocusSource};
-use kas::prelude::*;
-use kas::view::{DataKey, Driver, MatrixData, MatrixView, SharedData};
+use kas::view::{
+    DataChanges, DataClerk, DataKey, DataLen, Driver, GridIndex, GridView, TokenChanges,
+};
 use kas::widgets::{EditBox, EditField, EditGuard, ScrollBars};
+use kas::{prelude::*, TextOrSource};
 use std::collections::HashMap;
-use std::{fmt, iter, ops};
+use std::fmt;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Hash)]
 pub struct ColKey(u8);
-type ColKeyIter = iter::Map<ops::RangeInclusive<u8>, fn(u8) -> ColKey>;
 impl ColKey {
     const LEN: u8 = 26;
     fn try_from_u8(n: u8) -> Option<Self> {
         if (b'A'..=b'Z').contains(&n) {
-            Some(ColKey(n))
+            Some(ColKey(n - b'A'))
         } else {
             None
         }
     }
     fn from_u8(n: u8) -> Self {
         Self::try_from_u8(n).expect("bad column key")
-    }
-    fn iter_keys() -> ColKeyIter {
-        (b'A'..=b'Z').map(ColKey::from_u8)
     }
 }
 
@@ -39,7 +36,7 @@ impl fmt::Display for ColKey {
     }
 }
 
-const MAX_ROW: u8 = 99;
+const ROW_LEN: u32 = 100;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Key(ColKey, u8);
@@ -265,15 +262,6 @@ impl Cell {
         self.input = input;
     }
 
-    /// Get display string
-    fn display(&self) -> String {
-        if !self.display.is_empty() {
-            self.display.clone()
-        } else {
-            self.input.clone()
-        }
-    }
-
     fn try_eval(&mut self, values: &HashMap<Key, f64>) -> Result<Option<f64>, EvalError> {
         if self.parse_error {
             // Display the error locally; propegate NaN
@@ -345,60 +333,50 @@ impl CellData {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-struct Item {
-    input: String,
-    display: String,
-    error: bool,
+struct Clerk {
+    empty_cell: Cell,
 }
 
-impl SharedData for CellData {
+impl DataClerk<GridIndex> for Clerk {
+    type Data = CellData;
     type Key = Key;
-    type Item = Item;
-    type ItemRef<'b> = Self::Item;
+    type Item = Cell;
+    type Token = Key;
 
-    fn contains_key(&self, _: &Self::Key) -> bool {
-        // we know both sub-keys are valid and that the length is fixed
-        true
+    fn update(&mut self, _: &mut ConfigCx<'_>, _: Id, _: &Self::Data) -> DataChanges {
+        DataChanges::Any
     }
 
-    fn borrow(&self, key: &Self::Key) -> Option<Self::Item> {
-        self.cells
-            .get(key)
-            .map(|cell| Item {
-                input: cell.input.clone(),
-                display: cell.display(),
-                error: cell.parse_error,
-            })
-            .or_else(|| Some(Item::default()))
-    }
-}
-
-impl MatrixData for CellData {
-    type ColKey = ColKey;
-    type RowKey = u8;
-    type ColKeyIter<'b> = iter::Take<iter::Skip<ColKeyIter>>;
-    type RowKeyIter<'b> = iter::Take<iter::Skip<ops::RangeInclusive<u8>>>;
-
-    fn is_empty(&self) -> bool {
-        false
-    }
-    fn len(&self) -> (usize, usize) {
-        (ColKey::LEN.cast(), 99)
+    fn len(&self, _: &CellData, _: GridIndex) -> DataLen<GridIndex> {
+        DataLen::Known(GridIndex {
+            col: ColKey::LEN.cast(),
+            row: ROW_LEN,
+        })
     }
 
-    fn col_iter_from(&self, start: usize, limit: usize) -> Self::ColKeyIter<'_> {
-        ColKey::iter_keys().skip(start).take(limit)
+    fn update_token(
+        &self,
+        _: &CellData,
+        index: GridIndex,
+        _: bool,
+        token: &mut Option<Key>,
+    ) -> TokenChanges {
+        if index.col >= ColKey::LEN as u32 || index.row >= ROW_LEN {
+            *token = None;
+            return TokenChanges::Any;
+        }
+
+        let key = Key(ColKey(index.col as u8), index.row as u8);
+        if *token == Some(key) {
+            TokenChanges::None
+        } else {
+            *token = Some(key);
+            TokenChanges::Any
+        }
     }
 
-    fn row_iter_from(&self, start: usize, limit: usize) -> Self::RowKeyIter<'_> {
-        // NOTE: for strict compliance with the 7GUIs challenge the rows should
-        // start from 0, but any other spreadsheet I've seen starts from 1!
-        (1..=MAX_ROW).skip(start).take(limit)
-    }
-
-    fn make_key(&self, col: &Self::ColKey, row: &Self::RowKey) -> Self::Key {
-        Key(*col, *row)
+    fn item<'r>(&'r self, data: &'r CellData, key: &'r Key) -> &'r Cell {
+        data.cells.get(key).unwrap_or(&self.empty_cell)
     }
 }
 
@@ -411,31 +389,34 @@ struct CellGuard {
     is_input: bool,
 }
 impl EditGuard for CellGuard {
-    type Data = Item;
+    type Data = Cell;
 
-    fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, item: &Item) {
-        let mut action = edit.set_error_state(item.error);
+    fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, item: &Cell) {
+        edit.set_error_state(cx, item.parse_error);
         if !edit.has_edit_focus() {
-            action |= edit.set_str(&item.display);
+            let text = if !item.display.is_empty() {
+                &item.display
+            } else {
+                &item.input
+            };
+            edit.set_str(cx, text);
             edit.guard.is_input = false;
         }
-        cx.action(edit, action);
     }
 
-    fn activate(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Item) -> IsUsed {
+    fn activate(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Cell) -> IsUsed {
         Self::focus_lost(edit, cx, item);
         IsUsed::Used
     }
 
-    fn focus_gained(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Item) {
-        cx.action(edit.id(), edit.set_str(&item.input));
+    fn focus_gained(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Cell) {
+        edit.set_str(cx, &item.input);
         edit.guard.is_input = true;
     }
 
-    fn focus_lost(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Item) {
-        let s = edit.get_string();
-        if edit.guard.is_input && s != item.input {
-            cx.push(UpdateInput(edit.guard.key, s));
+    fn focus_lost(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Cell) {
+        if edit.guard.is_input && edit.as_str() != item.input {
+            cx.push(UpdateInput(edit.guard.key, edit.clone_string()));
         }
     }
 }
@@ -443,7 +424,7 @@ impl EditGuard for CellGuard {
 #[derive(Debug)]
 struct CellDriver;
 
-impl Driver<Item, CellData> for CellDriver {
+impl Driver<Key, Cell> for CellDriver {
     // TODO: we should use EditField instead of EditBox but:
     // (a) there is currently no code to draw separators between cells
     // (b) EditField relies on a parent (EditBox) to draw background highlight on error state
@@ -454,6 +435,15 @@ impl Driver<Item, CellData> for CellDriver {
             key: *key,
             is_input: false,
         })
+        .with_width_em(6.0, 6.0)
+    }
+
+    fn navigable(_: &Self::Widget) -> bool {
+        false
+    }
+
+    fn label(widget: &Self::Widget) -> Option<TextOrSource<'_>> {
+        Some(widget.as_str().into())
     }
 }
 
@@ -470,46 +460,29 @@ pub fn window() -> Window<()> {
     cells.insert(make_key("C2"), Cell::new("= A2 * A3 * A4"));
     data.update_values();
 
-    let cells = MatrixView::new(CellDriver).with_num_visible(5, 20);
+    let clerk = Clerk {
+        empty_cell: Cell::default(),
+    };
+
+    let cells = GridView::new(clerk, CellDriver).with_num_visible(5, 20);
 
     let ui = impl_anon! {
-        #[widget {
-            layout = self.cells;
-        }]
+        #[widget]
+        #[layout(self.cells)]
         struct {
             core: widget_core!(),
             data: CellData = data,
-            #[widget(&self.data)] cells: ScrollBars<MatrixView<CellData, CellDriver>> =
+            #[widget(&self.data)] cells: ScrollBars<GridView<Clerk, CellDriver>> =
                 ScrollBars::new(cells),
         }
         impl Events for Self {
             type Data = ();
 
-            fn steal_event(&mut self, cx: &mut EventCx, _: &(), _: &Id, event: &Event) -> IsUsed {
-                match event {
-                    Event::Command(Command::Enter, _) => {
-                        if let Some(Key(col, row)) = cx.nav_focus().and_then(|id| {
-                            Key::reconstruct_key(self.cells.inner().id_ref(), id)
-                        })
-                        {
-                            let row = if cx.modifiers().shift_key() {
-                                (row - 1).max(1)
-                            } else {
-                                (row + 1).min(MAX_ROW)
-                            };
-                            let id = Key(col, row).make_id(self.cells.inner().id_ref());
-                            cx.next_nav_focus(Some(id), false, FocusSource::Synthetic);
-                        }
-                        IsUsed::Used
-                    },
-                    _ => IsUsed::Unused
-                }
-            }
-
             fn handle_messages(&mut self, cx: &mut EventCx, _: &()) {
                 if let Some(UpdateInput(key, input)) = cx.try_pop() {
                     self.data.cells.entry(key).or_default().update(input);
                     self.data.update_values();
+                    cx.update(self.cells.as_node(&self.data));
                 }
             }
         }

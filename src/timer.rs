@@ -5,15 +5,16 @@
 
 //! Timer
 
+use kas::event::TimerHandle;
 use kas::prelude::*;
-use kas::widgets::{label_any, Adapt, Button, ProgressBar, Slider, Text};
+use kas::widgets::{grid, Adapt, Button, ProgressBar, Slider, Text};
 use std::time::{Duration, Instant};
 
-const DUR_MIN: Duration = Duration::from_secs(0);
-const DUR_MAX: Duration = Duration::from_secs(30);
-const DUR_STEP: Duration = Duration::from_millis(100);
-const TIMER_ID: u64 = 0;
-const TIMER_SLEEP: Duration = DUR_STEP;
+const DUR_MIN: u64 = 0;
+const DUR_MAX: u64 = 30_000;
+const DUR_STEP: u64 = 100;
+const TIMER_ID: TimerHandle = TimerHandle::new(0, true);
+const TIMER_SLEEP: Duration = Duration::from_millis(DUR_STEP);
 
 #[derive(Clone, Debug)]
 struct ActionReset;
@@ -21,26 +22,26 @@ struct ActionReset;
 pub fn window() -> Window<()> {
     #[derive(Debug)]
     struct Data {
-        duration: Duration,
+        millis: u64,
         elapsed: Duration,
         start: Option<Instant>,
     }
 
-    let ui = kas::grid! {
+    let ui = grid! {
         (0, 0) => "Elapsed time:",
-        (1, 0) => ProgressBar::right(|_, data: &Data| data.elapsed.as_secs_f32() / data.duration.as_secs_f32()),
+        (1, 0) => ProgressBar::right(|_, data: &Data| data.elapsed.as_secs_f32() * 1000.0 / f32::conv(data.millis)),
         (1, 1) => Text::new(|_, data: &Data| {
             format!("{}.{}s", data.elapsed.as_secs(), data.elapsed.subsec_millis() / 100)
         }),
         (0, 2) => "Duration:",
-        (1, 2) => Slider::right(DUR_MIN..=DUR_MAX, |_, data: &Data| data.duration)
+        (1, 2) => Slider::right(DUR_MIN..=DUR_MAX, |_, data: &Data| data.millis)
                     .with_step(DUR_STEP)
                     .with_msg(|value| value),
-        (0..2, 3) => Button::new_msg(label_any("Reset"), ActionReset),
+        (0..2, 3) => Button::label_msg("&Reset", ActionReset).map_any(),
     };
 
     let data = Data {
-        duration: Duration::from_secs(10),
+        millis: 10_000,
         elapsed: Duration::default(),
         start: None,
     };
@@ -52,25 +53,24 @@ pub fn window() -> Window<()> {
         })
         .on_timer(TIMER_ID, |cx, data, _| {
             if let Some(start) = data.start {
-                data.elapsed = data.duration.min(Instant::now() - start);
-                if data.elapsed < data.duration {
+                let duration = Duration::from_millis(data.millis);
+                data.elapsed = duration.min(Instant::now() - start);
+                if data.elapsed < duration {
                     cx.request_timer(TIMER_ID, TIMER_SLEEP);
                 } else {
                     data.start = None;
                 }
-                true
-            } else {
-                false
             }
         })
-        .on_message(|cx, data, dur| {
-            data.duration = dur;
+        .on_message(|cx, data, millis| {
+            data.millis = millis;
+            let duration = Duration::from_millis(data.millis);
             if let Some(start) = data.start {
-                data.elapsed = data.duration.min(Instant::now() - start);
-                if data.elapsed >= data.duration {
+                data.elapsed = duration.min(Instant::now() - start);
+                if data.elapsed >= duration {
                     data.start = None;
                 }
-            } else if data.elapsed < data.duration {
+            } else if data.elapsed < duration {
                 data.start = Some(Instant::now() - data.elapsed);
                 cx.request_timer(TIMER_ID, Duration::ZERO);
             }
