@@ -12,6 +12,7 @@ use kas::widgets::{EditBox, EditField, EditGuard, ScrollBars};
 use kas::{prelude::*, TextOrSource};
 use std::collections::HashMap;
 use std::fmt;
+use std::ops::Range;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Hash)]
 pub struct ColKey(u8);
@@ -343,7 +344,13 @@ impl DataClerk<GridIndex> for Clerk {
     type Item = Cell;
     type Token = Key;
 
-    fn update(&mut self, _: &mut ConfigCx<'_>, _: Id, _: &Self::Data) -> DataChanges {
+    fn update(
+        &mut self,
+        _: &mut ConfigCx<'_>,
+        _: Id,
+        _: Range<GridIndex>,
+        _: &Self::Data,
+    ) -> DataChanges<GridIndex> {
         DataChanges::Any
     }
 
