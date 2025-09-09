@@ -19,5 +19,5 @@ pub fn window() -> Window<()> {
         Button::label_msg("&Count", Incr).map_any(),
     ];
     let ui = ui.with_state(0).on_message(|_, count, Incr| *count += 1);
-    Window::new(ui, "Counter")
+    Window::new(ui, "Counter").escapable()
 }
