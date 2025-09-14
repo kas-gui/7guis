@@ -1,7 +1,7 @@
 KAS 7GUIs
 ==========
 
-[7GUIs](https://eugenkiss.github.io/7guis/) is a GUI programming benchmark.
+[7GUIs](https://github.com/7guis/7guis/) is a GUI programming benchmark.
 This repository implements the benchmark's tasks via the [KAS] GUI.
 
 [KAS]: https://github.com/kas-gui/kas
