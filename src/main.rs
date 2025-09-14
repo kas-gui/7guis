@@ -62,7 +62,7 @@ fn main() -> Result<(), kas::runner::Error> {
             }
         }
     };
-    let window = Window::new(ui, "7GUIs Launcher");
+    let window = Window::new(ui, "7GUIs Launcher").escapable();
 
     let theme = kas::theme::FlatTheme::new();
     kas::runner::Runner::with_theme(theme)

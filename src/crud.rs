@@ -5,6 +5,8 @@
 
 //! Create Read Update Delete
 
+use std::ops::Range;
+
 use kas::dir::Down;
 use kas::view::filter::{ContainsCaseInsensitive, Filter, FilterValue, KeystrokeGuard, SetFilter};
 use kas::view::{DataChanges, DataClerk, DataLen, Driver, ListView, SelectionMsg, TokenChanges};
@@ -128,7 +130,13 @@ impl DataClerk<usize> for EntriesClerk {
     type Item = Entry;
     type Token = usize;
 
-    fn update(&mut self, _: &mut ConfigCx, _: Id, filter: &Self::Data) -> DataChanges {
+    fn update(
+        &mut self,
+        _: &mut ConfigCx,
+        _: Id,
+        _: Range<usize>,
+        filter: &Self::Data,
+    ) -> DataChanges<usize> {
         // TODO(opt) determine when updates are a no-op and return DataChanges::None
 
         self.filtered_entries = self

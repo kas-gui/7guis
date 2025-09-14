@@ -179,5 +179,5 @@ pub fn window() -> Window<()> {
             cx.add_window::<()>(MessageBox::new(msg).into_window("Booker result"));
         });
 
-    Window::new(ui, "Flight Booker")
+    Window::new(ui, "Flight Booker").escapable()
 }

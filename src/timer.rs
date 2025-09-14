@@ -80,5 +80,5 @@ pub fn window() -> Window<()> {
             cx.request_timer(TIMER_ID, TIMER_SLEEP);
         });
 
-    Window::new(ui, "Timer")
+    Window::new(ui, "Timer").escapable()
 }

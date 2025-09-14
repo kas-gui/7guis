@@ -49,5 +49,5 @@ pub fn window() -> Window<()> {
         "Fahrenheit",
     ];
     let ui = Adapt::new(ui, Temperature::default()).on_message(|_, temp, msg| temp.handle(msg));
-    Window::new(ui, "Temperature Converter")
+    Window::new(ui, "Temperature Converter").escapable()
 }
