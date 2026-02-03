@@ -5,10 +5,9 @@
 
 //! Cells: a mini spreadsheet
 
-use kas::view::{
-    DataChanges, DataClerk, DataKey, DataLen, Driver, GridIndex, GridView, TokenChanges,
-};
-use kas::widgets::{EditBox, EditField, EditGuard, ScrollBars};
+use kas::view::clerk::{self, AsyncClerk, TokenChanges, TokenClerk};
+use kas::view::{Driver, GridIndex, GridView};
+use kas::widgets::{edit, EditBox, ScrollRegion};
 use kas::{prelude::*, TextOrSource};
 use std::collections::HashMap;
 use std::fmt;
@@ -41,7 +40,7 @@ const ROW_LEN: u32 = 100;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Key(ColKey, u8);
-impl DataKey for Key {
+impl clerk::Key for Key {
     fn make_id(&self, parent: &Id) -> Id {
         assert_eq!(std::mem::size_of::<ColKey>(), 1);
         let key = (((self.0).0 as usize) << 8) | (self.1 as usize);
@@ -338,11 +337,20 @@ struct Clerk {
     empty_cell: Cell,
 }
 
-impl DataClerk<GridIndex> for Clerk {
+impl clerk::Clerk<GridIndex> for Clerk {
     type Data = CellData;
-    type Key = Key;
     type Item = Cell;
-    type Token = Key;
+
+    fn len(&self, _: &CellData, _: GridIndex) -> clerk::Len<GridIndex> {
+        clerk::Len::Known(GridIndex {
+            col: ColKey::LEN.cast(),
+            row: ROW_LEN,
+        })
+    }
+}
+
+impl AsyncClerk<GridIndex> for Clerk {
+    type Key = Key;
 
     fn update(
         &mut self,
@@ -350,16 +358,13 @@ impl DataClerk<GridIndex> for Clerk {
         _: Id,
         _: Range<GridIndex>,
         _: &Self::Data,
-    ) -> DataChanges<GridIndex> {
-        DataChanges::Any
+    ) -> clerk::Changes<GridIndex> {
+        clerk::Changes::Any
     }
+}
 
-    fn len(&self, _: &CellData, _: GridIndex) -> DataLen<GridIndex> {
-        DataLen::Known(GridIndex {
-            col: ColKey::LEN.cast(),
-            row: ROW_LEN,
-        })
-    }
+impl TokenClerk<GridIndex> for Clerk {
+    type Token = Key;
 
     fn update_token(
         &self,
@@ -395,35 +400,36 @@ struct CellGuard {
     key: Key,
     is_input: bool,
 }
-impl EditGuard for CellGuard {
+impl edit::EditGuard for CellGuard {
     type Data = Cell;
 
-    fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, item: &Cell) {
-        edit.set_error_state(cx, item.parse_error);
-        if !edit.has_edit_focus() {
-            let text = if !item.display.is_empty() {
-                &item.display
-            } else {
-                &item.input
-            };
-            edit.set_str(cx, text);
-            edit.guard.is_input = false;
+    fn update(&mut self, edit: &mut edit::Editor, cx: &mut ConfigCx, item: &Cell) {
+        if item.parse_error {
+            edit.set_error(cx, None);
         }
+
+        let text = if !item.display.is_empty() {
+            &item.display
+        } else {
+            &item.input
+        };
+        edit.set_str(cx, text);
+        self.is_input = false;
     }
 
-    fn activate(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Cell) -> IsUsed {
-        Self::focus_lost(edit, cx, item);
+    fn activate(&mut self, edit: &mut edit::Editor, cx: &mut EventCx, item: &Cell) -> IsUsed {
+        self.focus_lost(edit, cx, item);
         IsUsed::Used
     }
 
-    fn focus_gained(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Cell) {
+    fn focus_gained(&mut self, edit: &mut edit::Editor, cx: &mut EventCx, item: &Cell) {
         edit.set_str(cx, &item.input);
-        edit.guard.is_input = true;
+        self.is_input = true;
     }
 
-    fn focus_lost(edit: &mut EditField<Self>, cx: &mut EventCx, item: &Cell) {
-        if edit.guard.is_input && edit.as_str() != item.input {
-            cx.push(UpdateInput(edit.guard.key, edit.clone_string()));
+    fn focus_lost(&mut self, edit: &mut edit::Editor, cx: &mut EventCx, item: &Cell) {
+        if self.is_input && edit.as_str() != item.input {
+            cx.push(UpdateInput(self.key, edit.clone_string()));
         }
     }
 }
@@ -436,6 +442,7 @@ impl Driver<Key, Cell> for CellDriver {
     // (a) there is currently no code to draw separators between cells
     // (b) EditField relies on a parent (EditBox) to draw background highlight on error state
     type Widget = EditBox<CellGuard>;
+    const TAB_NAVIGABLE: bool = false;
 
     fn make(&mut self, key: &Key) -> Self::Widget {
         EditBox::new(CellGuard {
@@ -479,8 +486,8 @@ pub fn window() -> Window<()> {
         struct {
             core: widget_core!(),
             data: CellData = data,
-            #[widget(&self.data)] cells: ScrollBars<GridView<Clerk, CellDriver>> =
-                ScrollBars::new(cells),
+            #[widget(&self.data)] cells: ScrollRegion<GridView<Clerk, CellDriver>> =
+                ScrollRegion::new_viewport(cells),
         }
         impl Events for Self {
             type Data = ();
