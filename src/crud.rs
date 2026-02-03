@@ -63,6 +63,10 @@ impl edit::EditGuard for NameGuard {
             edit.set_error(cx, None);
         }
     }
+
+    fn focus_lost(&mut self, _: &mut edit::Editor, _: &mut EventCx<'_>, _: &Self::Data) {
+        // Do nothing (the default impl calls Self::update)
+    }
 }
 
 impl_scope! {
@@ -124,6 +128,19 @@ struct EntriesClerk {
     // This is an easy way of ensuring that Key-Entry mappings do not change.
     entries: Vec<Option<Entry>>,
     filtered_entries: Vec<usize>,
+}
+
+impl EntriesClerk {
+    /// Delete the entry at `index`; return an index of a nearby item
+    fn delete(&mut self, index: usize) -> usize {
+        self.entries[index] = None;
+        for i in (index + 1..self.entries.len()).chain((0..index).rev()) {
+            if self.entries[i].is_some() {
+                return i;
+            }
+        }
+        0
+    }
 }
 
 impl Clerk<usize> for EntriesClerk {
@@ -260,7 +277,6 @@ pub fn window() -> Window<()> {
                             if let Some(item) = self.editor.make_item() {
                                 let index = self.list.inner().clerk().entries.len();
                                 self.list.inner_mut().clerk_mut().entries.push(Some(item));
-                                cx.update(self.list.as_node(&self.filter));
                                 self.list.inner_mut().select(cx, index);
                                 self.selected = self.list.inner().clerk().entries.get(index).cloned().flatten();
                                 cx.update(self.as_node(&()));
@@ -270,15 +286,13 @@ pub fn window() -> Window<()> {
                             if let Some(index) = self.selected() {
                                 if let Some(item) = self.editor.make_item() {
                                     self.list.inner_mut().clerk_mut().entries[index] = Some(item);
-                                    cx.update(self.list.as_node(&self.filter));
                                     cx.update(self.as_node(&()));
                                 }
                             }
                         }
                         Control::Delete => {
                             if let Some(index) = self.selected() {
-                                self.list.inner_mut().clerk_mut().entries[index] = None;
-                                cx.update(self.list.as_node(&self.filter));
+                                let index = self.list.inner_mut().clerk_mut().delete(index);
                                 self.list.inner_mut().select(cx, index);
                                 self.selected = self.list.inner().clerk().entries.get(index).cloned().flatten();
                                 cx.update(self.as_node(&()));
