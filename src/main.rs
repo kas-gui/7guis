@@ -57,7 +57,7 @@ fn main() -> Result<(), kas::runner::Error> {
                         X::Crud => crud::window(),
                         X::Cells => cells::window(),
                         _ => MessageBox::new("Not implemented yet!").into_window("TODO"),
-                    });
+                    }, false);
                 }
             }
         }

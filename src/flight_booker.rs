@@ -8,7 +8,7 @@
 use chrono::{Duration, Local, NaiveDate, ParseError};
 use kas::prelude::*;
 use kas::widgets::dialog::MessageBox;
-use kas::widgets::{column, Adapt, Button, ComboBox, EditBox, EditField, EditGuard, Text};
+use kas::widgets::{column, edit, Adapt, Button, ComboBox, EditBox, Text};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Flight {
@@ -92,29 +92,31 @@ impl Guard {
         Guard { is_return_field }
     }
 }
-impl EditGuard for Guard {
+impl edit::EditGuard for Guard {
     type Data = Data;
 
-    fn edit(edit: &mut EditField<Self>, cx: &mut EventCx, _: &Self::Data) {
+    fn edit(&mut self, edit: &mut edit::Editor, cx: &mut EventCx, _: &Self::Data) {
         let result = NaiveDate::parse_from_str(edit.as_str().trim(), "%Y-%m-%d");
-        edit.set_error_state(cx, result.is_err());
+        if result.is_err() {
+            edit.set_error(cx, Some("not a valid date".into()));
+        }
 
         cx.push(ActionDate {
             result,
-            is_return_field: edit.guard.is_return_field,
+            is_return_field: self.is_return_field,
         });
     }
 
-    fn update(edit: &mut EditField<Self>, cx: &mut ConfigCx, data: &Self::Data) {
-        if !edit.has_edit_focus() && edit.as_str().is_empty() {
-            if let Ok(date) = match edit.guard.is_return_field {
+    fn update(&mut self, edit: &mut edit::Editor, cx: &mut ConfigCx, data: &Self::Data) {
+        if edit.as_str().is_empty() {
+            if let Ok(date) = match self.is_return_field {
                 false => data.out,
                 true => data.ret,
             } {
                 edit.set_string(cx, date.format("%Y-%m-%d").to_string());
             }
         }
-        if edit.guard.is_return_field {
+        if self.is_return_field {
             cx.set_disabled(edit.id(), data.flight == Flight::OneWay);
         }
     }
@@ -139,7 +141,7 @@ pub fn window() -> Window<()> {
         ),
         EditBox::new(Guard::new(false)),
         EditBox::new(Guard::new(true)),
-        Text::new(|_, data: &Data| format!("{}", data.error)),
+        Text::new_gen(|_, data: &Data| format!("{}", data.error)),
         Button::label_msg("&Book", ActionBook)
             .map_any()
             .on_update(|cx, _, data: &Data| cx.set_disabled(!data.error.is_none())),
@@ -176,7 +178,7 @@ pub fn window() -> Window<()> {
                     ),
                 }
             };
-            cx.add_window::<()>(MessageBox::new(msg).into_window("Booker result"));
+            cx.add_window::<()>(MessageBox::new(msg).into_window("Booker result"), false);
         });
 
     Window::new(ui, "Flight Booker").escapable()

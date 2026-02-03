@@ -30,14 +30,14 @@ pub fn window() -> Window<()> {
     let ui = grid! {
         (0, 0) => "Elapsed time:",
         (1, 0) => ProgressBar::right(|_, data: &Data| data.elapsed.as_secs_f32() * 1000.0 / f32::conv(data.millis)),
-        (1, 1) => Text::new(|_, data: &Data| {
+        (1, 1) => Text::new_gen(|_, data: &Data| {
             format!("{}.{}s", data.elapsed.as_secs(), data.elapsed.subsec_millis() / 100)
         }),
         (0, 2) => "Duration:",
         (1, 2) => Slider::right(DUR_MIN..=DUR_MAX, |_, data: &Data| data.millis)
                     .with_step(DUR_STEP)
                     .with_msg(|value| value),
-        (0..2, 3) => Button::label_msg("&Reset", ActionReset).map_any(),
+        (0..=1, 3) => Button::label_msg("&Reset", ActionReset).map_any(),
     };
 
     let data = Data {
@@ -47,11 +47,11 @@ pub fn window() -> Window<()> {
     };
 
     let ui = Adapt::new(ui, data)
-        .on_configure(|cx, data| {
+        .on_configure(|cx, _, data| {
             data.start = Some(Instant::now());
             cx.request_timer(TIMER_ID, TIMER_SLEEP);
         })
-        .on_timer(TIMER_ID, |cx, data, _| {
+        .on_timer(TIMER_ID, |cx, _, data, _| {
             if let Some(start) = data.start {
                 let duration = Duration::from_millis(data.millis);
                 data.elapsed = duration.min(Instant::now() - start);
